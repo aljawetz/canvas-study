@@ -1,0 +1,75 @@
+# Canvas Study
+
+A Claude Code plugin that lets you ask Claude about your Canvas courses:
+
+- **What's due:** deadlines, submission status, scores and rubrics, read live from Canvas and shown in your time zone.
+- **What the course says:** answers from your slides, readings, syllabus and Canvas pages, each fact linked to the Canvas page it came from.
+- **Help studying:** explanations grounded in your own course material. It won't write your graded work for you.
+
+Unofficial. Not made by or affiliated with Instructure, the maker of Canvas.
+
+## Install
+
+In Claude Code:
+
+```text
+/plugin install canvas-study --marketplace aljawetz/canvas-study
+```
+
+Claude Code asks for your Canvas URL (default `https://canvas.cmu.edu`) and a Canvas access token. To make one:
+Canvas > Account > Settings > Approved Integrations > **+ New Access Token**.
+
+Then run:
+
+```text
+/canvas-study:setup
+```
+
+Setup downloads what it needs (about 400 MB the first time, a minute or two), lets you pick your courses and indexes
+them. Then ask away: "What's due this week?", "What does the syllabus say about late work?"
+
+Works on macOS and Linux. Windows isn't supported yet.
+
+## Privacy
+
+Everything stays on your computer:
+
+- Your Canvas token is kept in your system keychain by Claude Code.
+- Your course index lives in the plugin's data folder (`~/.claude/plugins/data/canvas-study-canvas-study/`).
+- The plugin itself calls no AI service. It talks only to your Canvas, plus one-time downloads of its Python packages
+  (PyPI) and its search model (Hugging Face). The answers come from Claude Code, under your own Claude account.
+
+Uninstalling the plugin deletes its data folder.
+
+## How it works
+
+| Part | What it does |
+| --- | --- |
+| `plugin/skills/setup` | `/canvas-study:setup`: gets the server and model ready, checks the token, syncs the courses you pick |
+| `plugin/skills/ask` | Routes course questions to the right tool, cites sources as Canvas links, refuses graded work |
+| `plugin/server` | The MCP server: `list_courses`, `search_course_material`, `list_assignments`, `sync_course`, `sync_status` |
+| `plugin/scripts/server` | Starts the server with `uv` (installed into the plugin's data folder if missing) |
+| `plugin/hooks` | Points you to setup until a course is indexed |
+
+Search is hybrid (vector + keyword, rank fusion) over a local LanceDB index, with the
+[bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5) embedding model running on your machine.
+
+## Development
+
+```bash
+uv sync                  # dev environment
+uv run pytest            # tests (the first run downloads the model into ./models)
+./plugin/dev.sh          # Claude Code with this checkout's plugin and nothing else
+claude plugin eval plugin/ --judge-model sonnet   # tool and skill evals (costs a few dollars)
+```
+
+To try the real install flow from a checkout, add it as a local marketplace:
+
+```text
+/plugin marketplace add /path/to/canvas-study
+/plugin install canvas-study@canvas-study
+```
+
+## License
+
+MIT

@@ -1,0 +1,27 @@
+# Dev environment for this repo: runs the tests against plugin/server, the
+# code students install. Not a package; the plugin's own is plugin/server.
+[project]
+name = "canvas-study-dev"
+version = "0"
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "canvas-study-mcp",
+    "pytest>=8.3",
+    "respx>=0.22",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+canvas-study-mcp = { path = "plugin/server", editable = true }
+
+[tool.pytest.ini_options]
+pythonpath = ["plugin/server"]
+testpaths = ["tests"]
+markers = [
+    "real_reranker: uses the real reranker model, skipped if it is not converted",
+]

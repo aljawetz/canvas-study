@@ -1,0 +1,12 @@
+{
+  "name": "canvas-study",
+  "owner": { "name": "Arthur Jawetz" },
+  "description": "Canvas Study: your Canvas courses inside Claude Code.",
+  "plugins": [
+    {
+      "name": "canvas-study",
+      "source": "./plugin",
+      "description": "Ask Claude about your Canvas courses: deadlines, grades and course materials, with links to the Canvas page."
+    }
+  ]
+}

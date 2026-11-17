@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.9.28"
+          enable-cache: true
+      - name: Install Tesseract (OCR fallback)
+        run: sudo apt-get update && sudo apt-get install -y tesseract-ocr
+      - name: Cache the embedding model
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: bge-small-5c38ec7c
+      - run: uv sync
+      - run: uv run pytest -q
+      - name: The plugin's server builds and starts
+        run: plugin/scripts/server --version

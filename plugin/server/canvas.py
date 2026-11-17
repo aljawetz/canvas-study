@@ -1,0 +1,234 @@
+"""Direct Canvas REST API client — implementation-plan.md Step 3.
+
+Bearer-token auth with the student's own Canvas token, read from Keychain
+per call (cheap lookup; picks up a re-entered key immediately, no caching
+staleness). Pagination follows the Link response header (RFC 5988) —
+confirmed against a real request before writing this, not assumed.
+
+A 403/404 on any individual endpoint means "not available to this token" and
+degrades to an empty result rather than raising — canvas-integration.md §2/§4.
+A 429 means rate-limited and gets retried with backoff — §5.
+"""
+
+import os
+import re
+import time
+from pathlib import Path
+
+import httpx
+
+import config
+import credentials
+
+# Default when nothing's configured yet — real base URL is a config.json
+# value (contribution-and-distribution-plan.md step 2), not a constant;
+# It used to only work against CMU's Canvas at all.
+CANVAS_API_URL = "https://canvas.cmu.edu/api/v1"
+SM_HOME = Path.home() / ".canvas-study"  # set to the real value by main.py at startup; tests monkeypatch this directly
+
+_LINK_RE = re.compile(r'<([^>]+)>;\s*rel="([^"]+)"')
+
+
+class CanvasError(Exception):
+    """A Canvas API failure that isn't a recoverable 403/404 or 429."""
+
+
+def _token() -> str:
+    # The Claude Code plugin passes its own token (userConfig, stored in the
+    # system keychain by Claude Code); the app's own keychain entry is the
+    # fallback. Plan docs/plans/2026-11-13-claude-code-plugin.md, Decision 3.
+    token = os.environ.get("SM_CANVAS_TOKEN") or credentials.get("canvas-token")
+    if not token:
+        raise CanvasError("no Canvas token stored — onboarding hasn't completed")
+    return token
+
+
+def _api_base() -> str:
+    origin = config.normalize_canvas_base_url(os.environ.get("SM_CANVAS_URL") or "") or config.read_config(SM_HOME).get("canvas_base_url")
+    return f"{origin}/api/v1" if origin else CANVAS_API_URL
+
+
+def _client() -> httpx.Client:
+    return httpx.Client(
+        base_url=_api_base(),
+        headers={"Authorization": f"Bearer {_token()}"},
+        timeout=15.0,
+    )
+
+
+def _next_link(link_header: str | None) -> str | None:
+    if not link_header:
+        return None
+    for url, rel in _LINK_RE.findall(link_header):
+        if rel == "next":
+            return url
+    return None
+
+
+def _get(client: httpx.Client, url: str, params: dict | None = None, max_retries: int = 3) -> httpx.Response | None:
+    """GET with backoff on 429, 5xx, and transport errors; 403/404 returns
+    None (not available). Transport errors are retried because they're
+    usually momentary — a real sync lost a file to one "_ssl.c: The
+    handshake operation timed out" on a metadata fetch that would have
+    succeeded a second later."""
+    for attempt in range(max_retries):
+        last = attempt == max_retries - 1
+        try:
+            r = client.get(url, params=params)
+        except httpx.TransportError:
+            if last:
+                raise
+            time.sleep(2**attempt)
+            continue
+        if r.status_code == 429 or (r.status_code >= 500 and not last):
+            time.sleep(float(r.headers.get("Retry-After", 2**attempt)))
+            continue
+        if r.status_code in (403, 404):
+            return None
+        r.raise_for_status()
+        return r
+    raise CanvasError(f"rate limited after {max_retries} retries: {url}")
+
+
+def download(url: str, max_retries: int = 3) -> bytes:
+    """A file's bytes from its Canvas download URL (which redirects to
+    storage — no auth header needed or sent), with the same transport-error
+    and 5xx retry as _get."""
+    with httpx.Client(follow_redirects=True, timeout=60) as client:
+        for attempt in range(max_retries):
+            last = attempt == max_retries - 1
+            try:
+                r = client.get(url)
+            except httpx.TransportError:
+                if last:
+                    raise
+                time.sleep(2**attempt)
+                continue
+            if r.status_code >= 500 and not last:
+                time.sleep(2**attempt)
+                continue
+            r.raise_for_status()
+            return r.content
+    raise AssertionError("unreachable")
+
+
+def _get_all(client: httpx.Client, path: str, params: dict | None = None) -> list:
+    """Follow Link-header pagination across every page. A 403/404 on the
+    endpoint itself degrades to [] rather than raising — canvas-integration.md
+    §2 (a 403 here isn't distinguishable from "genuinely empty" without a
+    logging layer we don't have yet; both degrade the same way for now)."""
+    items: list = []
+    url = path
+    first = True
+    while url:
+        r = _get(client, url, params=params if first else None)
+        first = False
+        if r is None:
+            return items
+        items.extend(r.json())
+        url = _next_link(r.headers.get("link"))
+    return items
+
+
+def list_courses() -> list[dict]:
+    with _client() as client:
+        return _get_all(client, "/courses", params={"per_page": 50})
+
+
+def get_profile() -> dict:
+    """The student's own profile; its time_zone (an IANA name) is the zone
+    Canvas shows their deadlines in."""
+    with _client() as client:
+        r = _get(client, "/users/self/profile")
+        return r.json() if r else {}
+
+
+def list_assignments(course_id: int) -> list[dict]:
+    # include[]=submission embeds the student's own real submission status
+    # (workflow_state, submitted_at, late, missing) directly in each
+    # assignment — confirmed against a real course, avoids an N+1 call per
+    # assignment to /submissions/self.
+    with _client() as client:
+        return _get_all(client, f"/courses/{course_id}/assignments", params={"per_page": 50, "include[]": "submission"})
+
+
+def get_assignment(course_id: int, assignment_id: int) -> dict | None:
+    with _client() as client:
+        r = _get(client, f"/courses/{course_id}/assignments/{assignment_id}")
+        return r.json() if r else None
+
+
+def list_pages(course_id: int) -> list[dict]:
+    with _client() as client:
+        return _get_all(client, f"/courses/{course_id}/pages", params={"per_page": 50})
+
+
+def get_page(course_id: int, page_url: str) -> dict | None:
+    with _client() as client:
+        r = _get(client, f"/courses/{course_id}/pages/{page_url}")
+        return r.json() if r else None
+
+
+def get_front_page(course_id: int) -> dict | None:
+    """The course home page, when the course uses a wiki page as its home
+    — a regular page (url slug, body, updated_at), often not in Modules.
+    None (404) for courses whose home is Modules or the syllabus."""
+    with _client() as client:
+        r = _get(client, f"/courses/{course_id}/front_page")
+        return r.json() if r else None
+
+
+def get_syllabus(course_id: int) -> str | None:
+    """syllabus_body HTML — where due dates and grading rules live. Not a
+    wiki page and has no updated_at of its own; course_sync.py diffs it by
+    content hash instead."""
+    with _client() as client:
+        r = _get(client, f"/courses/{course_id}", params={"include[]": "syllabus_body"})
+        return r.json().get("syllabus_body") if r else None
+
+
+def list_announcements(course_id: int) -> list[dict]:
+    """Every announcement in the course, newest first. Not /announcements,
+    which returns only the last 14 days unless given a date range (2 of
+    56350's 13)."""
+    with _client() as client:
+        return _get_all(
+            client, f"/courses/{course_id}/discussion_topics", params={"only_announcements": "true", "per_page": 50}
+        )
+
+
+def list_discussions(course_id: int) -> list[dict]:
+    """The course's discussion topics (announcements left out): the opening
+    post's HTML in "message", not the replies."""
+    with _client() as client:
+        return _get_all(client, f"/courses/{course_id}/discussion_topics", params={"per_page": 50})
+
+
+def get_course_structure(course_id: int) -> list[dict]:
+    """Modules + items — navigation metadata and the file-discovery path
+    (list_course_files 403s under a student token; individual files stay
+    reachable via module items of type File, fetched by content_id)."""
+    with _client() as client:
+        return _get_all(
+            client,
+            f"/courses/{course_id}/modules",
+            params={"include[]": "items", "per_page": 50},
+        )
+
+
+def list_course_files(course_id: int) -> list[dict]:
+    """The bulk Files-tab listing. It 403s (degrading to []) when the
+    course hides its Files tab from students (canvas-integration.md §2);
+    when the tab is shown it lists files no module does (24 of 56350's 31).
+    One of course_sync's three ways to find files, with module items and
+    links in the course's own pages."""
+    with _client() as client:
+        return _get_all(client, f"/courses/{course_id}/files", params={"per_page": 50})
+
+
+def get_file(file_id: int) -> dict | None:
+    """A single file's metadata (incl. download URL), by the content_id
+    found via get_course_structure's module items."""
+    with _client() as client:
+        r = _get(client, f"/files/{file_id}")
+        return r.json() if r else None
