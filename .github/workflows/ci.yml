@@ -5,6 +5,10 @@ on:
     branches: [main]
   pull_request:
 
+env:
+  # Same as plugin/scripts/server: nltk refuses hard-linked files.
+  UV_LINK_MODE: copy
+
 jobs:
   test:
     runs-on: ubuntu-latest
