@@ -1,15 +1,14 @@
-"""The course outline behind chat's list_course_items tool (RAG gaps plan
-task 8, docs/plans/2026-11-09-rag-course-gaps.md).
+"""The course outline: every item in each Canvas module, saved at sync.
 
 "What are all the readings for week 3?" can't be answered from a handful
 of search results: search returns the passages most like the question, not
 every item in a module. Canvas already says what's in each module, and the
 sync fetches that structure (canvas.get_course_structure) to find files. It
-is saved here as a flat outline in the course's manifest.db, so chat can
-list a module, a section or a kind of item in full.
+is saved here as a flat outline in the course's manifest.db, so the
+list_course_items tool can list a module, a section or a kind of item in full.
 
-An outline row is a name, not content: the model may list names from it, but
-what an item says still comes from search_course with citations.
+An outline row is a name, not content: Claude may list names from it, but
+what an item says still comes from search_course_material with citations.
 
 Sub-headers (Canvas "SubHeader" items, such as "Readings" or "Unit Testing")
 aren't items; they become the section of the items under them, until the
@@ -171,7 +170,8 @@ def format_listing(rows: list[dict], topic: str = "", types: list[str] | None = 
             lines.append(f"\nModule: {module or '(no module name)'}")
         if row["section"] != section:
             section = row["section"]
-            lines.append(f"  {section}:")
+            if section:
+                lines.append(f"  {section}:")
         lines.append(("    " if section else "  ") + _item_line(row))
     if len(hits) > len(shown):
         lines.append(f"\n{len(hits) - len(shown)} more not shown. Ask again with a topic or types to narrow it.")

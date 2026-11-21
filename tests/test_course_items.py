@@ -151,3 +151,14 @@ def test_topic_words_may_be_spread_over_module_section_and_title():
     text = course_items.format_listing(rows, topic="sprint deliverables")
     assert "Sprint 1 Deliverable" in text and "Democracy Day" not in text
     assert "Sprint 1 Deliverable" in course_items.format_listing(rows, topic="Deliverables sprint")
+
+
+def test_items_after_a_section_get_no_empty_section_header():
+    rows = [
+        {"module": "Week 1", "section": "Readings", "title": "Intro.pdf", "item_type": "file", "url": ""},
+        {"module": "Week 1", "section": "", "title": "Quiz 1", "item_type": "quiz", "url": ""},
+    ]
+    text = course_items.format_listing(rows)
+
+    assert "  :" not in text
+    assert text.endswith("\n  - Quiz 1 (quiz)")
