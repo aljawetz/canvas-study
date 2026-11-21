@@ -7,6 +7,7 @@ here calls a model. Its tools:
   cutoff) over the course's indexed materials, returning whole chunks with
   their citation labels and Canvas links. No reranker: on the heldout set it
   added about 0.2 s a search and no hit@5, and it is one less model to download.
+- list_course_items: a synced course's module outline, for complete lists.
 - list_assignments: deadlines, status, scores and rubrics, live from Canvas.
 - sync_course / sync_status: index a course in the background (sync_jobs.py).
 
@@ -35,6 +36,7 @@ import httpx
 import assignments
 import canvas
 import citation_links
+import course_items
 import indexing
 import sync
 import sync_jobs
@@ -54,7 +56,9 @@ INSTRUCTIONS = (
     "a follow-up search with a stand-alone version of the question. Deadlines, what is due, submission "
     "status, scores and rubrics: call list_assignments, which reads Canvas live. Show its times exactly as "
     "due_at_display gives them (already in the student's time zone) and use due_in for how far away they "
-    "are; never convert a time or guess a zone yourself. Course facts come only from tool results, cited "
+    "are; never convert a time or guess a zone yourself. Complete lists of what a course has (every reading "
+    "in week 3, all the quizzes): call list_course_items, which lists names only; search for what an item "
+    "says. Course facts come only from tool results, cited "
     "with their source label as a markdown link to its url when it has one, like "
     "[syllabus · p.3](https://...). Use list_courses to find the course id; a course that is not indexed "
     "can't be searched yet, so offer to sync it with sync_course (list_assignments works without a sync). Never write or solve the student's graded "
@@ -326,6 +330,16 @@ def build_server(home: Path | None = None, searcher: Searcher | None = None, cou
         """Search one course's materials. Returns up to k chunks, each with a source label to cite and,
         when the item is in Canvas, the url of its Canvas page."""
         return searcher.search(course_id, query, k)
+
+    @server.tool()
+    def list_course_items(course_id: int, topic: str = "", types: list[str] | None = None) -> dict:
+        """Every item in a synced course's Canvas modules (files, pages, assignments, quizzes, links, ...),
+        grouped by module and section: for "what are all the readings for week 3" or "list the quizzes",
+        which search can't answer completely. topic narrows it to a module, section or title ("week 3");
+        types to item kinds (file, page, assignment, quiz, discussion, link, tool, announcement). Names
+        only: search_course_material for what an item says."""
+        return {"listing": course_items.list_for_course(home, course_id, topic, types),
+                "url": f"{canvas.origin()}/courses/{course_id}/modules"}
 
     @server.tool()
     def list_assignments(course_id: int, days: int = assignments.DEFAULT_DAYS, only_unsubmitted: bool = False,

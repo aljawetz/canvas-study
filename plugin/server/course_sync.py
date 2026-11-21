@@ -425,7 +425,7 @@ def sync_course(course_id: int, sm_home: Path):
             {"id": f"file:{fid}", "updated_at": meta.get("updated_at", "")} for fid, meta in file_metas.items()
         ]
 
-        # The course outline, for listing questions in chat (course_items.py).
+        # The course outline, for list_course_items (course_items.py).
         # Like the deletion guards below, an empty listing never wipes one
         # already saved: a hidden modules tab looks the same as no modules.
         outline = course_items.outline_rows(structure, page_links=page_links, file_names=all_file_names)

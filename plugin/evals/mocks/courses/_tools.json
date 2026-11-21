@@ -45,6 +45,43 @@
       }
     },
     {
+      "name": "list_course_items",
+      "description": "Every item in a synced course's Canvas modules (files, pages, assignments, quizzes, links, ...),\ngrouped by module and section: for \"what are all the readings for week 3\" or \"list the quizzes\",\nwhich search can't answer completely. topic narrows it to a module, section or title (\"week 3\");\ntypes to item kinds (file, page, assignment, quiz, discussion, link, tool, announcement). Names\nonly: search_course_material for what an item says.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "course_id": {
+            "title": "Course Id",
+            "type": "integer"
+          },
+          "topic": {
+            "default": "",
+            "title": "Topic",
+            "type": "string"
+          },
+          "types": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Types"
+          }
+        },
+        "required": [
+          "course_id"
+        ],
+        "title": "list_course_itemsArguments"
+      }
+    },
+    {
       "name": "list_assignments",
       "description": "Live from Canvas: every assignment due in the next `days` days and the last week, submitted or not,\neach with its submission status and score. Times come in the student's zone: show due_at_display as\ngiven. Pass only_unsubmitted when the student asks only for what is left to hand in. With\nassignment_id: that one assignment's description, rubric, submission and score.",
       "inputSchema": {

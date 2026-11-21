@@ -109,8 +109,37 @@ def test_tools_and_instructions_are_listed():
             return tools, client.instructions
 
     tools, instructions = anyio.run(go)
-    assert tools == {"list_courses", "search_course_material", "list_assignments", "sync_course", "sync_status"}
+    assert tools == {"list_courses", "search_course_material", "list_course_items", "list_assignments",
+                     "sync_course", "sync_status"}
     assert "search_course_material before answering" in instructions
+    assert "list_course_items" in instructions
+
+
+def test_list_course_items_lists_the_saved_outline_with_a_modules_link(tmp_path, monkeypatch):
+    import course_items
+
+    monkeypatch.setenv("SM_CANVAS_URL", "https://canvas.example.edu")
+    (tmp_path / "courses" / "7").mkdir(parents=True)
+    conn = sync.open_manifest(tmp_path / "courses" / "7" / "manifest.db")
+    course_items.save_outline(conn, [
+        {"module": "Week 3: Elicitation", "section": "Readings", "title": "Interviews.pdf", "item_type": "file", "url": ""},
+        {"module": "Week 4: Modeling", "section": "", "title": "Quiz 4", "item_type": "quiz", "url": ""},
+    ])
+    conn.close()
+    server = mcp_server.build_server(tmp_path, courses_for=list)
+
+    out = _call(server, "list_course_items", {"course_id": 7, "topic": "week 3"})
+
+    assert "Interviews.pdf" in out["listing"] and "Quiz 4" not in out["listing"]
+    assert out["url"] == "https://canvas.example.edu/courses/7/modules"
+    quizzes = _call(server, "list_course_items", {"course_id": 7, "types": ["quiz"]})
+    assert "Quiz 4" in quizzes["listing"] and "Interviews.pdf" not in quizzes["listing"]
+
+
+def test_list_course_items_says_when_a_course_is_not_synced(tmp_path):
+    out = _call(mcp_server.build_server(tmp_path, courses_for=list), "list_course_items", {"course_id": 8})
+
+    assert "hasn't been synced" in out["listing"]
 
 
 def test_search_returns_chunks_with_citation_labels(tmp_path):
