@@ -1,5 +1,4 @@
-"""implementation-plan.md Step 4. Needs models/bge-small-en-v1.5-onnx/ —
-run scripts/convert_embedding_model.py once first.
+"""The ONNX bge-small embedding (conftest.py downloads the model).
 
 The stronger check (ONNX output matches the sentence-transformers/torch
 reference, cosine similarity ~1.0) was done once by hand during development,
@@ -10,11 +9,8 @@ recurring dependency, working against the whole point of this step.
 import numpy as np
 import pytest
 
-from embeddings import EMBEDDING_DIM, MODEL_DIR, OnnxBgeEmbedding
+from embeddings import EMBEDDING_DIM, OnnxBgeEmbedding
 
-pytestmark = pytest.mark.skipif(
-    not MODEL_DIR.exists(), reason="run scripts/convert_embedding_model.py first"
-)
 
 
 @pytest.fixture(scope="module")

@@ -1,16 +1,11 @@
-"""Downloads the embedding model for the plugin (plan
-docs/plans/2026-11-13-claude-code-plugin.md: the student installs nothing by
-hand, so the plugin fetches the model itself).
+"""Downloads the embedding model (the student installs nothing by hand).
 
 Only bge-small-en-v1.5, straight from Hugging Face's own ONNX export, pinned
-to one revision and checked by sha256. Its vectors match the app's
-optimum-exported model (scripts/convert_embedding_model.py) to 1e-7, so an
-index either one built works with the other. The plugin has no reranker.
+to one revision and checked by sha256.
 
 Each file downloads to a .part file and is renamed only after its hash
 checks out, so a cut connection never leaves a half model behind. A file
-already there is kept as is: the repo's dev models (a different export of
-the same weights) stay untouched.
+already there is kept as is.
 """
 
 import hashlib

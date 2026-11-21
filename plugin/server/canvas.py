@@ -1,30 +1,24 @@
-"""Direct Canvas REST API client — implementation-plan.md Step 3.
+"""Direct Canvas REST API client.
 
-Bearer-token auth with the student's own Canvas token, read from Keychain
-per call (cheap lookup; picks up a re-entered key immediately, no caching
-staleness). Pagination follows the Link response header (RFC 5988) —
+Bearer-token auth with the student's own Canvas token and school URL, both
+from the plugin's settings (SM_CANVAS_TOKEN and SM_CANVAS_URL, set by
+.mcp.json; Claude Code keeps the token in the system keychain). Pagination follows the Link response header (RFC 5988) —
 confirmed against a real request before writing this, not assumed.
 
 A 403/404 on any individual endpoint means "not available to this token" and
-degrades to an empty result rather than raising — canvas-integration.md §2/§4.
-A 429 means rate-limited and gets retried with backoff — §5.
+degrades to an empty result rather than raising. A 429 means rate-limited
+and gets retried with backoff.
 """
 
 import os
 import re
 import time
-from pathlib import Path
 
 import httpx
 
-import config
-import credentials
-
-# Default when nothing's configured yet — real base URL is a config.json
-# value (contribution-and-distribution-plan.md step 2), not a constant;
-# It used to only work against CMU's Canvas at all.
-CANVAS_API_URL = "https://canvas.cmu.edu/api/v1"
-SM_HOME = Path.home() / ".canvas-study"  # set to the real value by main.py at startup; tests monkeypatch this directly
+# plugin.json's default for the Canvas URL setting.
+DEFAULT_ORIGIN = "https://canvas.cmu.edu"
+CANVAS_API_URL = f"{DEFAULT_ORIGIN}/api/v1"
 
 _LINK_RE = re.compile(r'<([^>]+)>;\s*rel="([^"]+)"')
 
@@ -34,18 +28,32 @@ class CanvasError(Exception):
 
 
 def _token() -> str:
-    # The Claude Code plugin passes its own token (userConfig, stored in the
-    # system keychain by Claude Code); the app's own keychain entry is the
-    # fallback. Plan docs/plans/2026-11-13-claude-code-plugin.md, Decision 3.
-    token = os.environ.get("SM_CANVAS_TOKEN") or credentials.get("canvas-token")
+    token = os.environ.get("SM_CANVAS_TOKEN")
     if not token:
-        raise CanvasError("no Canvas token stored — onboarding hasn't completed")
+        raise CanvasError("no Canvas token set in the plugin's settings")
     return token
 
 
+def normalize_base_url(raw: str) -> str:
+    """Whatever a student reasonably pastes as their Canvas URL (a bare
+    domain, with or without a scheme, a trailing slash or an accidental
+    /api/v1) as just the origin, e.g. "https://canvas.cmu.edu"."""
+    value = raw.strip().rstrip("/")
+    if not value:
+        return value
+    if not value.startswith(("http://", "https://")):
+        value = f"https://{value}"
+    if value.endswith("/api/v1"):
+        value = value[: -len("/api/v1")]
+    return value.rstrip("/")
+
+
+def origin() -> str:
+    return normalize_base_url(os.environ.get("SM_CANVAS_URL") or "") or DEFAULT_ORIGIN
+
+
 def _api_base() -> str:
-    origin = config.normalize_canvas_base_url(os.environ.get("SM_CANVAS_URL") or "") or config.read_config(SM_HOME).get("canvas_base_url")
-    return f"{origin}/api/v1" if origin else CANVAS_API_URL
+    return f"{origin()}/api/v1"
 
 
 def _client() -> httpx.Client:
@@ -150,12 +158,6 @@ def list_assignments(course_id: int) -> list[dict]:
     # assignment to /submissions/self.
     with _client() as client:
         return _get_all(client, f"/courses/{course_id}/assignments", params={"per_page": 50, "include[]": "submission"})
-
-
-def get_assignment(course_id: int, assignment_id: int) -> dict | None:
-    with _client() as client:
-        r = _get(client, f"/courses/{course_id}/assignments/{assignment_id}")
-        return r.json() if r else None
 
 
 def list_pages(course_id: int) -> list[dict]:

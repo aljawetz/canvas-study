@@ -137,14 +137,6 @@ def test_search_caps_k_and_builds_the_retriever_once(tmp_path):
     assert calls == [COURSE]
 
 
-def test_the_plugin_searches_without_the_reranker(tmp_path):
-    # Measured on heldout: same hit@5 without it, about 0.2 s faster, and one
-    # less model for the student to download.
-    retriever = mcp_server.make_retriever(_build_index(tmp_path))
-
-    assert retriever._reranker is None
-
-
 def test_search_returns_more_than_five_when_k_asks(tmp_path):
     # Eight chunks share "rubric", so FTS alone finds them all.
     pages = [(f"The rubric for lab {i} counts style and tests.", "rubric.pdf", i) for i in range(1, 9)]
@@ -405,8 +397,8 @@ def test_zone_falls_back_to_the_machine_when_canvas_fails(monkeypatch):
     assert mcp_server.canvas_zone()() == mcp_server.assignments.machine_zone()
 
 
-def test_search_results_link_to_their_canvas_page(tmp_path):
-    (tmp_path / "config.json").write_text('{"canvas_base_url": "https://canvas.example.edu"}')
+def test_search_results_link_to_their_canvas_page(tmp_path, monkeypatch):
+    monkeypatch.setenv("SM_CANVAS_URL", "https://canvas.example.edu")
     store = LanceDBVectorStore(uri=str(tmp_path / "index.lancedb"), table_name=f"course_{COURSE}")
     node = TextNode(text="Late work loses ten percent per day.",
                     metadata={"source": "syllabus", "item_type": "syllabus", "page": None, "slide": None, "timestamp": None})

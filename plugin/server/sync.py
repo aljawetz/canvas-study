@@ -1,9 +1,8 @@
-"""Sync mechanism — implementation-plan.md Step 7, design spec §5.5.
+"""Sync bookkeeping.
 
 Diffs a course's current Canvas listing (ID + updated_at, cheap metadata
-only) against manifest.db (data-model.md §4) into new/changed/deleted/
-unchanged buckets. Runs once per app launch, not a background daemon —
-no separate scheduler needed.
+only) against its manifest.db into new/changed/deleted/unchanged buckets.
+Runs when sync_course is called, not as a background daemon.
 
 diff() takes an already-fetched remote listing rather than calling
 canvas.py itself, so it's testable against simulated Canvas data without
@@ -37,22 +36,15 @@ def open_manifest(db_path: Path) -> sqlite3.Connection:
 
 
 def content_hash(text: str) -> str:
-    """Hash of extracted text, not raw bytes (design spec §5.5) — a
+    """Hash of extracted text, not raw bytes: a
     metadata-only touch (rename, permission change) shouldn't trigger
     re-embedding if the actual content is unchanged."""
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def raw_bytes_hash(data: bytes) -> str:
-    """Fast pre-check before extraction (design spec §5.5) — identical
-    bytes skip extraction entirely, since extraction/embedding are the
-    expensive steps, not the metadata diff."""
-    return hashlib.sha256(data).hexdigest()
-
-
 def diff(conn: sqlite3.Connection, item_type: str, remote_items: list[dict]) -> dict[str, list[str]]:
     """remote_items: [{"id": str, "updated_at": str}, ...]. Sorts every
-    item into exactly one bucket per design spec §5.5."""
+    item into exactly one bucket."""
     rows = conn.execute(
         "SELECT canvas_item_id, canvas_updated_at FROM manifest WHERE item_type = ?", (item_type,)
     ).fetchall()

@@ -1,13 +1,7 @@
-"""implementation-plan.md Step 6 — re-derives rag-pipeline.md §4's original
-4-query retrieval smoke test as a real automated test. The exact original
-queries were never saved (same gap as steps 3 and 5's fixtures), except
-one preserved verbatim in the docs ("what citation style should I
-choose") — reused here. The other three are newly constructed against the
-same real fixture content, verified by reading the actual extracted text
-first, not guessed.
-
-Needs tests/fixtures/ingestion/ (scripts/fetch_ingestion_fixtures.py) and
-models/bge-small-en-v1.5-onnx/ (scripts/convert_embedding_model.py).
+"""A 4-query retrieval smoke test over the real fixture files in
+tests/fixtures/ingestion/, with the real embedding model. One query ("what
+citation style should I choose") is from the original manual test; the
+other three were written against the extracted text of the same files.
 """
 
 import tempfile
@@ -20,10 +14,6 @@ import indexing
 
 FIXTURES = Path(__file__).parent / "fixtures" / "ingestion"
 
-pytestmark = pytest.mark.skipif(
-    not FIXTURES.exists() or not (Path(__file__).parent.parent / "models").exists(),
-    reason="run scripts/fetch_ingestion_fixtures.py and scripts/convert_embedding_model.py first",
-)
 
 
 @pytest.fixture(scope="module")

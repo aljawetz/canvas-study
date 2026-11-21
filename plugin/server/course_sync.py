@@ -251,15 +251,12 @@ def _sync_topic(conn, db_path, table_name, topic, kind, is_changed):
 
 
 def sync_course(course_id: int, sm_home: Path):
-    """Generator — see module docstring and the design spec for the full
-    contract. Yields {"item", "status", "error"?} per processed item, then
+    """Generator. Yields {"item", "status", "error"?} per processed item, then
     exactly one final {"done": True, "new", "changed", "removed", "failed"}
     summary, or {"done": True, "error": str} if the course couldn't be
     synced at all. Exactly one terminal ("done") event always fires, even
-    if something unexpected blows up mid-stream — main.py has already sent
-    the 200 and streaming headers by the time this generator's body runs,
-    so an uncaught exception here would leave the connection dying
-    mid-stream with no terminating event for the frontend to act on.
+    if something unexpected blows up mid-stream, so sync_jobs always
+    records how the sync ended.
 
     Everything a student reaches from the course menu, not only Modules:
     Home, Syllabus, Pages, Assignments, Announcements, Discussions and Files.

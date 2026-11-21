@@ -1,8 +1,6 @@
-"""implementation-plan.md Step 5. Needs the real course files fetched by
-scripts/fetch_ingestion_fixtures.py — not committed (an instructor's
-actual course materials, not ours to redistribute; see .gitignore). The
-measured baseline derived from them *is* committed
-(tests/fixtures/ingestion_baseline.json) — numbers only, no extracted text.
+"""Extraction measured against real course files (tests/fixtures/ingestion/)
+and the baseline numbers taken from them
+(tests/fixtures/ingestion_baseline.json).
 
 sprint3_zotero_tutorial.pdf and sprint3_ai_research.pptx are confirmed to
 be the exact files Sprint 3 measured (matching page/slide counts and
@@ -21,9 +19,6 @@ import ingestion
 FIXTURES = Path(__file__).parent / "fixtures" / "ingestion"
 BASELINE = json.loads((Path(__file__).parent / "fixtures" / "ingestion_baseline.json").read_text())
 
-pytestmark = pytest.mark.skipif(
-    not FIXTURES.exists(), reason="run scripts/fetch_ingestion_fixtures.py first"
-)
 
 
 def test_zotero_pdf_matches_sprint3_plain_text():

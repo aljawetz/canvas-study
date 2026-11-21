@@ -1,14 +1,11 @@
-"""Chunking + indexing — implementation-plan.md Step 6.
+"""Chunking + indexing.
 
-Wires ingestion.py's extraction output into LlamaIndex nodes carrying
-citation-anchor metadata (rag-pipeline.md §2): a page or slide is a node,
-not an arbitrary token window — SentenceSplitter only kicks in for prose
-long enough to actually need it. Indexed into a LanceDB table via
-LlamaIndex's official integration (rag-pipeline.md §4).
-
-Path convention matches data-model.md §1 (<data folder>/index.lancedb/course_<code>/)
-but this module takes db_path as a parameter — callers decide where that
-actually points (the plugin's data folder, or a scratch dir for tests).
+Turns ingestion.py's extraction output into LlamaIndex nodes carrying
+citation metadata: a page or slide is a node, not an arbitrary token
+window, and SentenceSplitter only kicks in for prose long enough to need
+it. Each course is one LanceDB table (<data folder>/index.lancedb/
+course_<id>), through LlamaIndex's LanceDB integration. Callers pass
+db_path: the plugin's data folder, or a scratch dir in tests.
 """
 
 from pathlib import Path
@@ -34,16 +31,11 @@ from embeddings import EMBEDDING_DIM, MODEL_DIR, OnnxBgeEmbedding
 CHUNK_SIZE = 450
 CHUNK_OVERLAP = 60  # ~15%, same ratio as before
 
-# SentenceSplitter's default tokenizer is tiktoken (GPT-style) — two real
-# problems found by actually running this frozen: (1) it doesn't bundle
-# cleanly under PyInstaller (its encoding data isn't discoverable in a
-# frozen build), and (2) counting tokens with a different tokenizer than
-# the one the embedding model actually uses means a "700-token" chunk by
-# tiktoken's count could exceed BGE's real 512-token limit (which is what
-# originally crashed onnxruntime — embeddings.py's truncation stays as a
-# safety net, but this is the correct fix at the source).
-# Loaded on first use, not at import: the plugin's server imports this
-# module before setup has downloaded the models (tests/test_plugin_imports.py).
+# Chunks are counted in BGE's own tokens, not SentenceSplitter's default
+# tiktoken: a "450-token" chunk by tiktoken's count can run past BGE's real
+# 512-token window. Loaded on first use, not at import: the server imports
+# this module before setup has downloaded the models
+# (tests/test_plugin_imports.py).
 _bge_tokenizer: Tokenizer | None = None
 
 
@@ -53,16 +45,9 @@ def _tokenize(text: str) -> list[str]:
         _bge_tokenizer = Tokenizer.from_file(str(MODEL_DIR / "tokenizer.json"))
     return _bge_tokenizer.encode(text).tokens
 
-# Real finding (Step 9, only caught by actually running the frozen binary,
-# not `uv run python3`): tiktoken isn't just SentenceSplitter's default —
-# llama_index's internal get_tokenizer() is called from multiple places
-# (PromptHelper's TokenCounter, used by every query engine, is a second,
-# separate one found here) and ALL of them fall back to the same
-# module-global `llama_index.core.global_tokenizer` when it's unset. Fixing
-# only the splitter above left this second path crashing with the exact
-# same "Unknown encoding cl100k_base" in the frozen build. Setting it once,
-# globally, covers every current and future call site instead of chasing
-# them one at a time.
+# llama-index falls back to this global (tiktoken by default) wherever it
+# counts tokens itself; with ours set, nothing ever loads tiktoken, which
+# downloads its encoding on first use.
 set_global_tokenizer(_tokenize)
 
 _splitter = SentenceSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP, tokenizer=_tokenize)
@@ -76,16 +61,9 @@ def _with_ref_doc(node: TextNode, canvas_item_id: str) -> TextNode:
 
 
 def _metadata(source: str, item_type: str, *, page=None, slide=None, timestamp=None) -> dict:
-    """Every node across every node-creation function carries the same set
-    of metadata keys, only some populated per node — required, not just
-    tidy: LanceDB infers a table's column schema from whatever the first
-    batch of nodes happens to contain, and a plain columnar insert can't
-    add a new column later. A table built from Canvas pages alone (only
-    ever seeing "page") rejected a later insert of transcript nodes
-    ("timestamp") with "field 'timestamp' does not exist in table schema"
-    — a real, previously-latent bug Step 12 surfaced, the first time this
-    project ever inserted a second, differently-shaped node type into an
-    existing table rather than building a table fresh in one batch."""
+    """Every node carries the same metadata keys, most of them None: see
+    TABLE_SCHEMA. "timestamp" is never set any more but stays in the
+    schema, so tables built before it was retired still accept inserts."""
     return {"source": source, "item_type": item_type, "page": page, "slide": slide, "timestamp": timestamp}
 
 
@@ -93,10 +71,8 @@ def pages_to_nodes(pages: list[dict], source: str, canvas_item_id: str, item_typ
     """One node per page, split further only if the page's prose actually
     exceeds the target chunk size — most extracted pages don't.
 
-    item_type defaults to "file" for the original PDF-page caller
-    (generation.py's citation formatting reads this back as source_type);
-    course_sync.py passes item_type="page" for Canvas wiki pages, which
-    aren't paginated at all, so their nodes carry page=None."""
+    item_type is "file" for PDFs; course_sync.py passes other types for
+    Canvas content that isn't paginated, whose pages carry page=None."""
     nodes = []
     for page in pages:
         text = page["text"]
@@ -114,7 +90,7 @@ def sections_to_nodes(sections: list[dict], source: str, canvas_item_id: str, it
     table no longer shares a chunk with its staff list).
 
     Every chunk starts with a "Syllabus › Grading Algorithm" line, so both
-    the embedding and the chat model see what the chunk is part of even when
+    the embedding and Claude see what the chunk is part of even when
     the section's own text is just "12.5% | Project" rows. A heading with no
     text of its own ("Class Schedule" directly followed by another bold
     line) becomes a line of the next section instead of a near-empty chunk."""
@@ -150,70 +126,13 @@ def slides_to_nodes(slides: list[dict], source: str, canvas_item_id: str) -> lis
     return nodes
 
 
-def _format_timestamp(seconds: float) -> str:
-    minutes, secs = divmod(int(seconds), 60)
-    return f"{minutes}:{secs:02d}"
-
-
-def transcript_to_nodes(segments: list[dict], source: str, session_id: str) -> list[TextNode]:
-    """One node per ~2000-char group of consecutive faster-whisper segments
-    (split further only if that group's text still exceeds the target chunk
-    size), labeled by real timestamp rather than a page/slide number —
-    matches overview.md's own citation example ("Lecture 6 · 14:22").
-    Step 12 (design spec §9.3): transcript is indexed, notes are indexed
-    separately (notes_to_nodes) — the AI note-enhancement step is
-    transcript-only by product decision, but both stay searchable."""
-    nodes = []
-    buffer: list[str] = []
-    buffer_start: float | None = None
-    buffer_len = 0
-    for seg in segments:
-        if buffer_start is None:
-            buffer_start = seg["start"]
-        buffer.append(seg["text"])
-        buffer_len += len(seg["text"])
-        if buffer_len >= CHUNK_SIZE * 4:  # ~4 chars/token, rough gate before splitting further
-            nodes += _flush_transcript_buffer(buffer, buffer_start, source, session_id)
-            buffer, buffer_start, buffer_len = [], None, 0
-    if buffer:
-        nodes += _flush_transcript_buffer(buffer, buffer_start, source, session_id)
-    return nodes
-
-
-def _flush_transcript_buffer(buffer: list[str], start: float, source: str, session_id: str) -> list[TextNode]:
-    text = " ".join(buffer).strip()
-    if not text:
-        return []
-    nodes = []
-    for chunk in _splitter.split_text(text):
-        node = TextNode(text=chunk, metadata=_metadata(source, "transcript", timestamp=_format_timestamp(start)))
-        nodes.append(_with_ref_doc(node, session_id))
-    return nodes
-
-
-def notes_to_nodes(notes_text: str, source: str, session_id: str) -> list[TextNode]:
-    """The student's own rough in-class notes — indexed separately from the
-    transcript, never fed into the AI note-enhancement step (that reads the
-    transcript alone, by explicit product decision), but still searchable
-    via Q&A like everything else the student captures."""
-    if not notes_text.strip():
-        return []
-    nodes = []
-    for chunk in _splitter.split_text(notes_text):
-        node = TextNode(text=chunk, metadata=_metadata(source, "notes"))
-        nodes.append(_with_ref_doc(node, session_id))
-    return nodes
-
-
 # Every course table's layout, stated up front instead of inferred. LanceDB
 # otherwise infers column types from the first batch written, and a column
-# that's None in every node of that batch becomes type null for good — so
+# that's None in every node of that batch becomes type null for good, so
 # whichever material reached a course first decided what it could ever
-# hold. Real data: a course whose first write was a lecture transcript
-# (page=None) rejected every later PDF with "cannot cast field 'page' from
-# Int64 to Null"; a PDF-first course rejected transcripts and pptx slides.
+# hold (a course whose first batch had no page numbers rejected every PDF).
 # The metadata fields are _metadata()'s keys plus the ones llama-index's
-# node_to_metadata_dict adds, in the order it writes them.
+# node_to_metadata_dict adds, in its order.
 _METADATA_TYPE = pa.struct(
     [
         ("source", pa.string()),
@@ -241,29 +160,20 @@ TABLE_SCHEMA = pa.schema(
 
 
 class _PatchedLanceDBVectorStore(LanceDBVectorStore):
-    """llama-index-vector-stores-lancedb 0.6.0's delete(), delete_nodes(),
-    and get_nodes() all build SQL predicates by string-concatenating raw
-    values inside double quotes (e.g. `doc_id = "x"`), which LanceDB's
-    DataFusion-based SQL dialect parses as an identifier reference, not a
-    string literal — delete_ref_doc() fails for every input, not just
-    ours. Confirmed directly against a raw LanceDB table before assuming
-    it was our bug, not theirs, and confirmed still present on their
-    `main` branch, not just the release (implementation-plan.md Step 7).
-    Only delete() is overridden here — we don't call delete_nodes() or
-    get_nodes() ourselves (yet).
+    """Two changes to llama-index's LanceDB store.
 
-    Fixed with LanceDB's own type-safe expression API (`col`/`lit`)
-    instead of hand-escaping a SQL string — no string interpolation left
-    to get wrong at all, not just correctly-quoted. Remove this override
-    once upstream fixes it."""
+    delete(): upstream (still in 0.7.0) builds `doc_id = "x"` with double
+    quotes, which LanceDB's SQL parses as a column name, so every delete
+    fails. This uses LanceDB's col/lit expressions instead. Remove once
+    upstream fixes it.
+
+    add(): creates a missing table with TABLE_SCHEMA rather than letting
+    the base class infer one from the first batch."""
 
     def delete(self, ref_doc_id: str, **delete_kwargs: Any) -> None:
         self.table.delete(col(self.doc_id_key) == lit(ref_doc_id))
 
     def add(self, nodes, **add_kwargs: Any) -> list[str]:
-        # The base class creates a missing table from the first batch's
-        # inferred types; creating it empty with TABLE_SCHEMA first turns
-        # that into a plain append against the right layout.
         if self._table is None and nodes:
             self._table = self._connection.create_table(self._table_name, schema=TABLE_SCHEMA, mode=self.mode)
         return super().add(nodes, **add_kwargs)
@@ -272,15 +182,7 @@ class _PatchedLanceDBVectorStore(LanceDBVectorStore):
 def build_index(nodes: list[TextNode], db_path: Path, table_name: str) -> VectorStoreIndex:
     vector_store = _PatchedLanceDBVectorStore(uri=str(db_path), table_name=table_name)
     storage_context = StorageContext.from_defaults(vector_store=vector_store)
-    # transformations must be explicit here, not left to fall back to
-    # Settings.transformations' default: that default is a SentenceSplitter
-    # built with tiktoken, and just constructing it (even on nodes that are
-    # already pre-chunked and never actually re-split) crashed the frozen
-    # PyInstaller build with "Unknown encoding cl100k_base" — the same
-    # tiktoken-doesn't-bundle-cleanly problem the module docstring already
-    # notes for chunking, just a second, previously-undiscovered code path
-    # into the same default (implementation-plan.md Step 9 — only surfaced
-    # by actually running the frozen binary, not `uv run python3`).
+    # Explicit transformations: the default is a tiktoken SentenceSplitter.
     index = VectorStoreIndex(
         nodes, storage_context=storage_context, embed_model=OnnxBgeEmbedding(), transformations=[_splitter]
     )
@@ -289,11 +191,7 @@ def build_index(nodes: list[TextNode], db_path: Path, table_name: str) -> Vector
 
 
 def load_index(db_path: Path, table_name: str) -> VectorStoreIndex:
-    """Opens a previously-built table for querying, without re-adding nodes
-    (main.py's /ask handler — the index was already populated by a sync,
-    not by this request). transformations=[_splitter] for the same reason
-    as build_index: avoids ever touching Settings' tiktoken-based default,
-    even though no transformation actually runs against an empty node list."""
+    """Opens an existing table without adding nodes."""
     vector_store = _PatchedLanceDBVectorStore(uri=str(db_path), table_name=table_name)
     return VectorStoreIndex.from_vector_store(
         vector_store, embed_model=OnnxBgeEmbedding(), transformations=[_splitter]
@@ -306,33 +204,18 @@ def index_exists(db_path: Path, table_name: str) -> bool:
     return table_name in lancedb.connect(str(db_path)).table_names()
 
 
-def drop_table(db_path: Path, table_name: str) -> None:
-    """Course DELETE (Step 13) — the whole table, not specific rows
-    (delete_ref_doc_nodes is for one session; this is for the course
-    itself, e.g. no longer selected and never coming back)."""
-    if index_exists(db_path, table_name):
-        lancedb.connect(str(db_path)).drop_table(table_name)
-
-
 def ensure_fts_index(table) -> None:
-    """Idempotent — LanceDB persists the FTS index on the table itself, so
-    this only actually rebuilds when it's missing, not on every call.
-    Real (harmless) deprecation warning: LanceDB's replacement API for this
-    (`create_index(config=FTS())`) doesn't accept a column name the way the
-    docs suggest — confirmed by trying it directly, not assumed — so this
-    stays on the documented-deprecated-but-working call instead of chasing
-    an unclear replacement signature. HybridRetriever (generation.py) is
-    Step 12's real reason this exists: BM25 full-text search for exact
-    name/keyword lookups vector search alone is weak at."""
+    """BM25 full-text index for HybridRetriever (generation.py), which
+    exact names and keywords need. Built only when missing: LanceDB keeps it
+    on the table. create_fts_index is deprecated, but its replacement
+    (create_index(config=FTS())) didn't take a column name when tried."""
     if any(getattr(i, "index_type", None) == "FTS" for i in table.list_indices()):
         return
     table.create_fts_index("text", replace=True)
 
 
 def add_nodes(nodes: list[TextNode], db_path: Path, table_name: str) -> None:
-    """Session capture's entry point (Step 12) — a course may have no index
-    yet at all (a session recorded before any Canvas sync), so this can't
-    assume load_index's table already exists the way /ask and /explain do."""
+    """Adds to a course's table, creating it on the first write."""
     if index_exists(db_path, table_name):
         index = load_index(db_path, table_name)
         index.insert_nodes(nodes)
@@ -342,10 +225,7 @@ def add_nodes(nodes: list[TextNode], db_path: Path, table_name: str) -> None:
 
 
 def delete_ref_doc_nodes(db_path: Path, table_name: str, ref_doc_id: str) -> None:
-    """Deleting a session (Step 12) — the first real caller of the delete()
-    override _PatchedLanceDBVectorStore exists for for since Step 7 (that
-    was built and verified against the raw table directly, but never
-    exercised through an actual app feature until now)."""
+    """Removes every chunk of one Canvas item (a changed or deleted file)."""
     if not index_exists(db_path, table_name):
         return
     _PatchedLanceDBVectorStore(uri=str(db_path), table_name=table_name).delete(ref_doc_id)

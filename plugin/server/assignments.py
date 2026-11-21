@@ -1,5 +1,4 @@
-"""Assignments for the plugin's list_assignments tool (plan
-docs/plans/2026-11-13-claude-code-plugin.md, Decisions 15 and 17).
+"""Assignments for the plugin's list_assignments tool.
 
 Deadlines, submission status, scores and rubrics are read live from Canvas
 (canvas.list_assignments, one call with include[]=submission; Canvas puts
@@ -7,8 +6,7 @@ the rubric on every assignment that has one). The index is a snapshot and
 has none of the status, so it is only a fallback when Canvas can't be
 reached, and says so.
 
-The window rules follow the app's show_deadlines card (display_tools.py on
-the generative UI branches, not on main): unsubmitted work up to a week past
+Window rules: unsubmitted work up to a week past
 due still shows, as missed work the student should see; undated work is left
 out; at most MAX_ROWS rows.
 """

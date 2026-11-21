@@ -9,8 +9,6 @@ import pytest
 import respx
 
 import canvas
-import config
-import credentials
 
 FIXTURES = Path(__file__).parent / "fixtures" / "canvas"
 BASE = canvas.CANVAS_API_URL
@@ -21,16 +19,10 @@ def load(name: str) -> dict:
 
 
 @pytest.fixture(autouse=True)
-def fake_token(monkeypatch):
-    monkeypatch.setattr(credentials, "get", lambda key: "fake-token-for-tests")
-
-
-@pytest.fixture(autouse=True)
-def fake_sm_home(tmp_path, monkeypatch):
-    # No config.json here — real isolation from whatever's on the actual
-    # dev machine, and _api_base() falls through to CANVAS_API_URL (BASE
-    # above), same as every test already assumes.
-    monkeypatch.setattr(canvas, "SM_HOME", tmp_path)
+def fake_settings(monkeypatch):
+    # No SM_CANVAS_URL, so _api_base() is CANVAS_API_URL (BASE above).
+    monkeypatch.setenv("SM_CANVAS_TOKEN", "fake-token-for-tests")
+    monkeypatch.delenv("SM_CANVAS_URL", raising=False)
 
 
 @respx.mock
@@ -53,16 +45,6 @@ def test_get_page():
 
 
 @respx.mock
-def test_get_assignment():
-    fx = load("assignment")
-    respx.get(f"{BASE}/courses/56350/assignments/1020612").mock(
-        return_value=httpx.Response(fx["status"], json=fx["body"])
-    )
-    a = canvas.get_assignment(56350, 1020612)
-    assert a["name"] == fx["body"]["name"]
-
-
-@respx.mock
 def test_course_structure_success():
     fx = load("course_structure_ok")
     respx.get(f"{BASE}/courses/55710/modules").mock(return_value=httpx.Response(fx["status"], json=fx["body"]))
@@ -81,11 +63,9 @@ def test_course_structure_403_degrades_to_empty():
 
 
 @respx.mock
-def test_configured_base_url_is_used_instead_of_default(tmp_path, monkeypatch):
-    """contribution-and-distribution-plan.md step 2 — a school other than
-    CMU must actually be reachable, not just accepted by onboarding."""
-    monkeypatch.setattr(canvas, "SM_HOME", tmp_path)
-    config.write_config(tmp_path, {"canvas_base_url": "https://canvas.instructure.com"})
+def test_configured_base_url_is_used_instead_of_default(monkeypatch):
+    """A school other than CMU must actually be reachable."""
+    monkeypatch.setenv("SM_CANVAS_URL", "https://canvas.instructure.com")
     fx = load("courses")
     respx.get("https://canvas.instructure.com/api/v1/courses").mock(
         return_value=httpx.Response(fx["status"], json=fx["body"])
@@ -204,26 +184,37 @@ def test_download_raises_on_an_error_status_instead_of_returning_the_error_page(
         canvas.download("https://canvas.example/files/9/download")
 
 
-# --- plugin config: env wins over the app's keychain and config.json -------
+# --- plugin settings ----------------------------------------------------------
 
 
-def test_plugin_token_from_env_wins_over_keychain(monkeypatch):
-    monkeypatch.setenv("SM_CANVAS_TOKEN", "from-plugin")
-    monkeypatch.setattr(credentials, "get", lambda key: "from-keychain")
-
-    assert canvas._token() == "from-plugin"
-
-
-def test_empty_plugin_token_falls_back_to_keychain(monkeypatch):
+def test_missing_token_is_a_canvas_error(monkeypatch):
     monkeypatch.setenv("SM_CANVAS_TOKEN", "")
-    monkeypatch.setattr(credentials, "get", lambda key: "from-keychain")
 
-    assert canvas._token() == "from-keychain"
+    with pytest.raises(canvas.CanvasError):
+        canvas._token()
 
 
-def test_plugin_url_from_env_wins_and_is_normalized(tmp_path, monkeypatch):
-    monkeypatch.setattr(canvas, "SM_HOME", tmp_path)
-    (tmp_path / "config.json").write_text('{"canvas_base_url": "https://other.example.edu"}')
+def test_plugin_url_is_normalized(monkeypatch):
     monkeypatch.setenv("SM_CANVAS_URL", "canvas.example.edu/api/v1/")
 
     assert canvas._api_base() == "https://canvas.example.edu/api/v1"
+
+
+@pytest.mark.parametrize(
+    "raw, origin",
+    [
+        ("canvas.cmu.edu", "https://canvas.cmu.edu"),
+        ("https://canvas.cmu.edu/", "https://canvas.cmu.edu"),
+        ("https://canvas.cmu.edu/api/v1", "https://canvas.cmu.edu"),
+        ("http://localhost:8080", "http://localhost:8080"),
+        ("   ", ""),
+    ],
+)
+def test_normalize_base_url(raw, origin):
+    assert canvas.normalize_base_url(raw) == origin
+
+
+def test_empty_url_setting_means_the_default(monkeypatch):
+    monkeypatch.setenv("SM_CANVAS_URL", "")
+
+    assert canvas.origin() == canvas.DEFAULT_ORIGIN
