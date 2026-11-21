@@ -1,5 +1,4 @@
-"""implementation-plan.md Step 7. Diff logic tested against simulated
-Canvas listings (design spec §5.5's own test scope — mocked, not live).
+"""sync.py's diff logic, tested against simulated Canvas listings.
 The delete_ref_doc integration test caught a real upstream bug: verified
 against real requirements below.
 """
@@ -50,10 +49,6 @@ def test_diff_item_types_are_independent(conn):
     assert result["new"] == ["1"]  # "1" is new for item_type "file", unrelated to the page row
 
 
-@pytest.mark.skipif(
-    not (Path(__file__).parent.parent / "models").exists(),
-    reason="run scripts/convert_embedding_model.py first",
-)
 def test_changed_and_deleted_items_end_to_end(tmp_path):
     """The plan's actual test: simulate a changed item and a deleted item,
     confirm both the manifest and the LanceDB table end up correct —

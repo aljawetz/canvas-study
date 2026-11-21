@@ -1,9 +1,9 @@
-"""Local, torch-free embeddings — implementation-plan.md Step 4.
+"""Local, torch-free embeddings.
 
 Wraps the pre-converted ONNX model directly via onnxruntime + tokenizers,
 not LlamaIndex's own HuggingFaceEmbedding (sentence-transformers/torch) or
 its huggingface-optimum wrapper (still pulls torch transitively via
-optimum, confirmed by installing it — rag-pipeline.md §3). CLS-token
+optimum, confirmed by installing it). CLS-token
 pooling, L2-normalized, no query instruction prefix — verified to match
 the sentence-transformers reference bit-for-bit (cosine similarity
 ~1.0000) for the same input, and sentence-transformers' own packaged
@@ -38,8 +38,7 @@ class OnnxBgeEmbedding(BaseEmbedding):
         self._tokenizer = Tokenizer.from_file(str(model_dir / "tokenizer.json"))
         # Without this, a chunk that tokenizes past the model's 512-token
         # limit crashes onnxruntime instead of truncating — found by
-        # actually indexing real, dense content (implementation-plan.md
-        # Step 6), not a hypothetical edge case.
+        # actually indexing real, dense content.
         self._tokenizer.enable_truncation(max_length=MAX_SEQ_LENGTH)
         self._session = ort.InferenceSession(str(model_dir / "model.onnx"))
 

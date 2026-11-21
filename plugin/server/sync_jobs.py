@@ -1,6 +1,4 @@
-"""Course syncs started from Claude Code (plan
-docs/plans/2026-11-13-claude-code-plugin.md: everything happens inside the
-plugin, the student runs nothing else).
+"""Course syncs started from Claude Code (the student runs nothing else).
 
 A sync takes minutes, longer than a tool call should block, so sync_course
 starts it on a thread and returns; sync_status reads how far it got. The

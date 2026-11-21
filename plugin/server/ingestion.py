@@ -1,10 +1,7 @@
-"""Tiered content extraction — implementation-plan.md Step 5.
+"""Tiered content extraction: plain text -> density heuristic -> OCR.
 
-plain-text -> density heuristic -> OCR. Tier 4 (vision-model fallback) is
-deliberately deferred to Step 8, where the pluggable LLM client actually
-gets built — a one-off vision call here would just be redone then.
-needs_fallback() marks which pages would need it, so the routing logic is
-real even though the call itself isn't yet.
+needs_fallback() marks the pages whose own text looks incomplete; those
+get OCR of their images merged in (see merge_ocr_text).
 """
 
 import re
@@ -22,7 +19,7 @@ from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 
 def needs_fallback(char_count: int, has_image: bool) -> bool:
-    """rag-pipeline.md §1's density heuristic, calibrated against 217 real
+    """Density heuristic, calibrated against 217 real
     pages across 8 files: flag if chars<100, or chars<400 with an image
     present (a page with some text and an image needs a higher bar before
     being trusted as complete, since the image is more likely load-bearing
@@ -268,7 +265,7 @@ def extract_text_file(path: Path) -> list[dict]:
 
 
 # Put between a page's own text and whatever OCR adds from its images, so
-# the chat model can tell the two apart (OCR output can be noisy).
+# Claude can tell the two apart (OCR output can be noisy).
 OCR_MARKER = "[Text read from images on this page]"
 
 _WORD = re.compile(r"[a-z0-9]+")

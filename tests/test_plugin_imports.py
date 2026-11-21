@@ -1,8 +1,6 @@
-"""The server must start without any LLM stack: no tool calls a model
-(Claude Code is the LLM), and the package doesn't install openai or the
-chat modules these files came from. Importing one would crash a student's
-server at startup, so this runs the imports in a subprocess with them
-blocked.
+"""The server must start on a student's machine before setup has downloaded
+the models, and without an LLM SDK (no tool calls a model; Claude Code is
+the LLM). Runs the imports in a fresh subprocess with those blocked.
 """
 
 import os
@@ -12,9 +10,7 @@ from pathlib import Path
 
 SERVER = Path(__file__).resolve().parent.parent / "plugin" / "server"
 
-# The app-only modules: LLM providers, chat, memory, and their SDKs.
-BLOCKED = ["openai", "llama_index.llms.openai", "providers", "llm", "copilot_llm", "chat", "memory", "copilot",
-           "faster_whisper", "github_signin"]
+BLOCKED = ["openai", "llama_index.llms.openai"]
 
 PROBE = f"""
 import importlib.abc, sys
@@ -22,15 +18,15 @@ BLOCKED = {BLOCKED!r}
 class Block(importlib.abc.MetaPathFinder):
     def find_spec(self, name, path=None, target=None):
         if any(name == b or name.startswith(b + ".") for b in BLOCKED):
-            raise ImportError(f"plugin path imported app-only module {{name}}")
+            raise ImportError(f"server imported blocked module {{name}}")
 sys.meta_path.insert(0, Block())
-import mcp_server, course_sync, course_items, generation, assignments, citation_links, query_dates, model_download, sync_jobs
+import mcp_server, course_sync, course_items, generation, indexing, assignments, citation_links, query_dates, model_download, sync_jobs
 mcp_server.build_server()
 print("ok")
 """
 
 
-def test_server_imports_without_the_apps_chat_stack(tmp_path):
+def test_server_starts_without_models_or_llm_packages(tmp_path):
     # An empty models folder, as on a student's machine before setup downloads
     # the models: the server must still start (and say what's missing later).
     env = {**os.environ, "SM_MODELS_DIR": str(tmp_path / "models"), "SM_HOME": str(tmp_path / "home")}

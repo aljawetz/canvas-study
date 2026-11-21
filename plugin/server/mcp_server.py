@@ -43,8 +43,8 @@ logger = logging.getLogger("canvas-study")
 
 DEFAULT_K = 5
 MAX_K = 10
-# Whole chunks, as the app's chat shows them (chat.SNIPPET_CHARS: chunks top
-# out near 3,800 characters and answers often sit past the first 1,500).
+# Whole chunks: they top out near 3,800 characters and answers often sit past
+# the first 1,500.
 SNIPPET_CHARS = 4000
 NO_RESULTS = "No matching course material found for this search."
 
@@ -69,7 +69,7 @@ def sm_home() -> Path:
 
 def today() -> datetime.date:
     """SM_TODAY (YYYY-MM-DD) pins the date relative-date expansion uses, so an
-    eval run matches the app eval's fixed date. Unset: the real date."""
+    eval run is reproducible. Unset: the real date."""
     pinned = os.environ.get("SM_TODAY")
     return datetime.date.fromisoformat(pinned) if pinned else datetime.date.today()
 
@@ -139,13 +139,12 @@ def list_courses_result(home: Path, courses_for: Callable[[], list[dict]] = canv
 
 
 def make_retriever(index):
-    """The app's chat retriever for one index, without the reranker. It
-    returns MAX_K, not its default 5, so search's [:k] can reach MAX_K;
+    """The search retriever for one index. It returns MAX_K, not its default 5, so search's [:k] can reach MAX_K;
     fusion orders before it cuts, so the first 5 of 10 are the same top 5."""
     import generation  # lazy: it loads model code that list_courses never needs
 
     return generation.HybridRetriever(
-        index, similarity_top_k=MAX_K, similarity_cutoff=generation.SIMILARITY_CUTOFF, reranker=None
+        index, similarity_top_k=MAX_K, similarity_cutoff=generation.SIMILARITY_CUTOFF
     )
 
 
@@ -161,9 +160,8 @@ def _retriever_factory(home: Path):
 
 def _log_query(course_id: int, query: str, results: list[dict], seconds: float) -> None:
     """With SM_QUERY_LOG set, append each search as one JSON line: what
-    Claude asked and what came back. The eval (ask_modes_eval.py mode P)
-    scores retrieval and latency from it, the same way it scores the app's
-    searches. It holds course text, so it is never committed."""
+    Claude asked and what came back, for scoring retrieval and latency. It
+    holds course text, so it is never committed."""
     path = os.environ.get("SM_QUERY_LOG")
     if not path:
         return
@@ -217,7 +215,7 @@ class Searcher:
         expanded = query_dates.expand_relative_dates(query, self._today())
         nodes = list(self._retrievers[course_id].retrieve(expanded))[:k]
         citations = generation.build_citations(nodes)
-        origin = citation_links.canvas_origin(self._home)
+        origin = canvas.origin()
         results = [
             {
                 "n": n,
@@ -247,7 +245,7 @@ def _index_rows(home: Path, course_id: int) -> list[dict]:
 
 
 def _canvas_failure(error: Exception) -> str:
-    """Why Canvas gave nothing, in the words of plan Decision 14."""
+    """Why Canvas gave nothing, in words the student can act on."""
     if isinstance(error, httpx.HTTPStatusError) and error.response.status_code == 401:
         return ("Your Canvas token no longer works (make a new one in Canvas and paste it in /plugin > Installed > "
                 "canvas-study > Configure options, then run /reload-plugins)")
@@ -310,7 +308,6 @@ def sync_status_result(home: Path, course_id: int | None) -> dict:
 def build_server(home: Path | None = None, searcher: Searcher | None = None, courses_for=canvas.list_courses,
                  assignments_for=canvas.list_assignments, zone_for=None, jobs=None) -> MCPServer:
     home = home or sm_home()
-    canvas.SM_HOME = home  # canvas.py reads the Canvas base URL from SM_HOME/config.json
     searcher = searcher or Searcher(home)
     jobs = jobs or sync_jobs.SyncJobs(home, on_done=searcher.forget)
     zone_for = zone_for or canvas_zone()
@@ -358,8 +355,8 @@ def build_server(home: Path | None = None, searcher: Searcher | None = None, cou
 
 def main() -> None:
     if "--version" in sys.argv[1:]:
-        # Used to warm uvx's cache before Claude Code's first start (plan
-        # Decision 4): installs everything, imports nothing heavy.
+        # Used to warm uvx's cache before Claude Code's first start:
+        # installs everything, imports nothing heavy.
         from importlib.metadata import PackageNotFoundError, version
 
         try:

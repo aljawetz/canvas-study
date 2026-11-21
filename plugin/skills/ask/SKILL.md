@@ -53,8 +53,6 @@ the question is about. If more than one could fit, ask the student which one.
   so the student can click through to the page in Canvas: `[syllabus · p.9](https://...)` or
   `[03 Elicitation.pdf · slide 12](https://...)[syllabus · p.2](https://...)`. Copy the `url` exactly as
   the tool gave it; never build or guess one.
-- A result with no `url` (a class recording made in the app) is cited as the label alone in brackets:
-  `[2026-09-29 class · 14:22]`.
 - A fact from `list_assignments` is cited as `[Canvas: <assignment name>](<its url>)`.
 - Only cite a source for a claim that source actually states. Never cite general knowledge.
 

@@ -2,9 +2,9 @@
 (indexing.py).
 
 Guards the real failure where LanceDB inferred column types from a table's
-first batch: a lecture-first course rejected every PDF ("cannot cast field
-'page' from Int64 to Null"), a PDF-first course rejected transcripts and
-pptx slides. Needs models/bge-small-en-v1.5-onnx/ (real embeddings).
+first batch: a course whose first batch had no page numbers rejected every
+PDF ("cannot cast field 'page' from Int64 to Null"), and a PDF-first course
+rejected pptx slides.
 """
 
 from pathlib import Path
@@ -14,17 +14,8 @@ import pytest
 
 import indexing
 
-pytestmark = pytest.mark.skipif(
-    not (Path(__file__).parent.parent / "models").exists(),
-    reason="run scripts/convert_embedding_model.py first",
-)
 
 TABLE = "course_1"
-
-
-def _transcript():
-    segments = [{"start": 65.0, "end": 70.0, "text": "Today we cover regression testing and flaky tests."}]
-    return indexing.transcript_to_nodes(segments, "Class 1", "session-1")
 
 
 def _pdf():
@@ -35,8 +26,8 @@ def _slides():
     return indexing.slides_to_nodes([{"slide": 2, "text": "The test pyramid: many unit tests, few UI tests."}], "deck.pptx", "file:11")
 
 
-def _notes():
-    return indexing.notes_to_nodes("My notes: ask about mutation testing.", "Class 1", "session-1")
+def _page():
+    return indexing.sections_to_nodes([{"heading": "Grading", "text": "Project 40%"}], "Syllabus", "syllabus:1", "syllabus")
 
 
 def _anchors(db_path: Path) -> dict[str, tuple]:
@@ -48,20 +39,20 @@ def _anchors(db_path: Path) -> dict[str, tuple]:
 @pytest.mark.parametrize(
     "order",
     [
-        ["transcript", "pdf", "slides", "notes"],  # recorded a lecture before the first sync
-        ["pdf", "slides", "transcript", "notes"],  # synced first, recorded later
+        ["page", "pdf", "slides"],
+        ["slides", "pdf", "page"],
+        ["pdf", "slides", "page"],
     ],
 )
 def test_any_material_order_indexes_into_one_course(tmp_path, order):
-    makers = {"transcript": _transcript, "pdf": _pdf, "slides": _slides, "notes": _notes}
+    makers = {"page": _page, "pdf": _pdf, "slides": _slides}
     for kind in order:
         indexing.add_nodes(makers[kind](), tmp_path, TABLE)
 
     assert _anchors(tmp_path) == {
-        "transcript:Class 1": (None, None, "1:05"),
+        "syllabus:Syllabus": (None, None, None),
         "file:BVA.pdf": (3, None, None),
         "file:deck.pptx": (None, 2, None),
-        "notes:Class 1": (None, None, None),
     }
     assert lancedb.connect(str(tmp_path)).open_table(TABLE).schema == indexing.TABLE_SCHEMA
 
