@@ -1,11 +1,11 @@
-"""course_sync.py — docs/superpowers/specs/2026-09-20-course-sync-phase1-design.md.
+"""course_sync.py: the incremental sync of one course.
 
 canvas.py, ingestion.py, and indexing.py are all monkeypatched with plain
 stubs here — this tests course_sync.py's own branching logic
 (new/changed/deleted/failed), not Canvas's real API shape or real
 extraction/embedding, which their own test suites already cover. The
-real, unmocked end-to-end proof against live Canvas is
-scripts/course_sync_smoke_test.py.
+real end-to-end check against live Canvas is running
+/canvas-study:setup on a real course (./plugin/dev.sh).
 """
 
 import pytest
@@ -299,8 +299,7 @@ def test_unsupported_file_extension_is_skipped_not_synced(tmp_path, stub_extract
     events = run(1, tmp_path)
 
     assert events == [{"done": True, "new": 0, "changed": 0, "removed": 0, "failed": 0}]
-    # stderr, never stdout: stdout is the MCP server's protocol channel
-    # (docs/plans/2026-11-13-claude-code-plugin.md, M0).
+    # stderr, never stdout: stdout is the MCP server's protocol channel.
     captured = capsys.readouterr()
     assert "lecture.mp4" in captured.err
     assert captured.out == ""

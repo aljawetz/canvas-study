@@ -1,4 +1,4 @@
-"""ingestion.extract_html_page — docs/superpowers/specs/2026-09-20-course-sync-phase1-design.md.
+"""ingestion.extract_html_page: Canvas pages and syllabi to text.
 Plain inline HTML, no external fixtures needed (unlike test_ingestion.py's
 real-course-material tests)."""
 

@@ -3,8 +3,7 @@
 The inputs are real pairs from 18-654's course-info slides (native PDF text
 vs Tesseract output for the same page). Replacing the native text with OCR
 is what taught the chat that the grading slide said only "12.5% 17.5%" and
-that the final was on "December 2"4" — see
-docs/evaluations/2026-09-23-ask-modes/report.md."""
+that the final was on "December 2"4" in an early evaluation."""
 
 import ingestion
 

@@ -55,7 +55,7 @@ _splitter = SentenceSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP,
 
 
 def _with_ref_doc(node: TextNode, canvas_item_id: str) -> TextNode:
-    """Sets the node's ref_doc_id to canvas_item_id (data-model.md §4) — what
+    """Sets the node's ref_doc_id to canvas_item_id, which is what
     both the LanceDB integration's doc_id column and delete_ref_doc rely on."""
     node.relationships[NodeRelationship.SOURCE] = RelatedNodeInfo(node_id=canvas_item_id)
     return node
@@ -116,7 +116,7 @@ def sections_to_nodes(sections: list[dict], source: str, canvas_item_id: str, it
 
 def slides_to_nodes(slides: list[dict], source: str, canvas_item_id: str) -> list[TextNode]:
     """One node per slide, not split — a slide is a citation unit
-    (rag-pipeline.md §2), not something to fragment across chunks."""
+    ("slide 12"), not something to fragment across chunks."""
     nodes = []
     for slide in slides:
         text = slide["text"]
