@@ -29,6 +29,15 @@ import sync
 from embeddings import EMBEDDING_DIM
 
 SERVER = Path(__file__).resolve().parent.parent / "plugin" / "server"
+
+
+@pytest.fixture(autouse=True)
+def no_canvas_token(monkeypatch):
+    """A search refreshes a stale course from Canvas when a token is set; a
+    dev's own token must never send these tests to live Canvas."""
+    monkeypatch.delenv("SM_CANVAS_TOKEN", raising=False)
+
+
 COURSE = 55016
 
 
@@ -442,3 +451,87 @@ def test_search_results_link_to_their_canvas_page(tmp_path, monkeypatch):
     out = searcher.search(COURSE, "late work")
 
     assert out["results"][0]["url"] == f"https://canvas.example.edu/courses/{COURSE}/assignments/syllabus"
+
+
+class _FakeJobs:
+    def __init__(self, result=None):
+        self.started = []
+        self._result = result or {"started": True, "state": "running"}
+
+    def start(self, course_id):
+        self.started.append(course_id)
+        return {"course_id": course_id, **self._result}
+
+
+NOW = datetime.datetime(2026, 11, 21, 18, 0, tzinfo=datetime.timezone.utc)
+
+
+def _status(home, state, finished_at=None, course_id=COURSE):
+    d = home / "courses" / str(course_id)
+    d.mkdir(parents=True, exist_ok=True)
+    status = {"course_id": course_id, "state": state}
+    if finished_at:
+        status["finished_at"] = finished_at
+    (d / "sync_status.json").write_text(json.dumps(status))
+
+
+def _refresh(home, jobs, token=lambda: "t"):
+    return mcp_server.refresh_if_stale(home, jobs, COURSE, token_check=token, now=NOW)
+
+
+def test_a_fresh_index_is_not_refreshed(tmp_path):
+    _build_index(tmp_path)
+    _status(tmp_path, "done", "2026-11-21T15:00:00Z")
+    jobs = _FakeJobs()
+    assert _refresh(tmp_path, jobs) is None
+    assert jobs.started == []
+
+
+@pytest.mark.parametrize("status", [("done", "2026-11-21T08:00:00Z"), None])
+def test_a_stale_or_never_finished_index_refreshes_in_the_background(tmp_path, status):
+    _build_index(tmp_path)
+    if status:
+        _status(tmp_path, *status)
+    jobs = _FakeJobs()
+    note = _refresh(tmp_path, jobs)
+    assert jobs.started == [COURSE]
+    assert "Refreshing this course" in note and "last sync" in note
+
+
+def test_a_failed_sync_is_retried_only_after_a_while(tmp_path):
+    _build_index(tmp_path)
+    _status(tmp_path, "failed", "2026-11-21T17:45:00Z")
+    jobs = _FakeJobs()
+    assert _refresh(tmp_path, jobs) is None
+    _status(tmp_path, "failed", "2026-11-21T17:00:00Z")
+    assert _refresh(tmp_path, jobs) is not None and jobs.started == [COURSE]
+
+
+def test_no_refresh_without_an_index_or_a_token(tmp_path):
+    jobs = _FakeJobs()
+    assert _refresh(tmp_path, jobs) is None  # not indexed: syncing it is the student's call
+    _build_index(tmp_path)
+
+    def no_token():
+        raise mcp_server.canvas.CanvasError("no token")
+
+    assert _refresh(tmp_path, jobs, token=no_token) is None
+    assert jobs.started == []
+
+
+def test_search_says_when_the_course_is_refreshing(tmp_path, monkeypatch):
+    index = _build_index(tmp_path)
+    monkeypatch.setenv("SM_CANVAS_TOKEN", "t")
+    searcher, _ = _searcher(tmp_path, index)
+    jobs = _FakeJobs()
+    server = mcp_server.build_server(tmp_path, searcher=searcher, courses_for=list, jobs=jobs)
+
+    out = _call(server, "search_course_material", {"course_id": COURSE, "query": "late work"})
+
+    assert out["results"] and "Refreshing this course" in out["refresh"]
+    assert jobs.started == [COURSE]
+
+
+def test_last_synced_at_comes_from_the_last_finished_sync(tmp_path):
+    _status(tmp_path, "done", "2026-11-21T15:00:00Z")
+    assert mcp_server.last_synced_at(tmp_path, COURSE) == "2026-11-21T15:00:00Z"
