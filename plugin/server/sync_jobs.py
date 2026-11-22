@@ -21,6 +21,9 @@ logger = logging.getLogger("canvas-study.sync")
 
 STATUS_FILE = "sync_status.json"
 LOCK_FILE = "sync.lock"
+# Failed items kept in the status, newest last: enough to say what failed and
+# why without the status file growing with a course that fails every file.
+MAX_FAILURES = 10
 
 
 def _now() -> str:
@@ -135,7 +138,10 @@ class SyncJobs:
                         update(state="done", summary=summary)
                     break
                 if event.get("status") == "failed":
-                    update(items_failed=status["items_failed"] + 1, last_item=event.get("item"))
+                    failure = {"item": event.get("item"), "error": event.get("error") or "unknown error"}
+                    logger.warning("sync of course %s: %s failed: %s", course_id, failure["item"], failure["error"])
+                    failures = [*status.get("failures", []), failure][-MAX_FAILURES:]
+                    update(items_failed=status["items_failed"] + 1, last_item=event.get("item"), failures=failures)
                 else:
                     update(items_done=status["items_done"] + 1, last_item=event.get("item"))
             else:

@@ -57,7 +57,8 @@ are still running after that, tell the student they keep going in the background
 done?" any time.
 
 For a failed sync, say which course and the error in plain words. An item or two failing (`items_failed`) is
-normal: some files in Canvas can't be read, and the rest of the course still works.
+normal: some files in Canvas can't be read, and the rest of the course still works. `failures` names the
+last few that failed and why; mention them by name if the student asks what's missing.
 
 ## 6. Done
 
