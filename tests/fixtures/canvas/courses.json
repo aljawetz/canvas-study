@@ -13,7 +13,7 @@
       "is_public": false,
       "grading_standard_id": null,
       "root_account_id": 1,
-      "uuid": "xiYSO25wQ97Yjy7f9m8imhtYmLqNe5kyEHuvQ9ZJ",
+      "uuid": "fixture-course-uuid-01",
       "license": "private",
       "grade_passback_setting": null,
       "end_at": "2027-12-01T05:00:00Z",
@@ -26,7 +26,7 @@
       "friendly_name": null,
       "apply_assignment_group_weights": false,
       "calendar": {
-        "ics": "https://canvas.cmu.edu/feeds/calendars/course_xiYSO25wQ97Yjy7f9m8imhtYmLqNe5kyEHuvQ9ZJ.ics"
+        "ics": "https://canvas.example.edu/feeds/calendars/course_fixture-course-uuid-01.ics"
       },
       "time_zone": "America/Los_Angeles",
       "blueprint": false,
@@ -36,7 +36,7 @@
           "type": "student",
           "role": "StudentEnrollment",
           "role_id": 3,
-          "user_id": 151152,
+          "user_id": 1001,
           "enrollment_state": "active",
           "limit_privileges_to_course_section": false
         }
@@ -57,7 +57,7 @@
       "is_public": false,
       "grading_standard_id": null,
       "root_account_id": 1,
-      "uuid": "4rN978fyd9yExaC5wrSNyp3cFVsGWwPtlC2GEfoj",
+      "uuid": "fixture-course-uuid-02",
       "license": "private",
       "grade_passback_setting": null,
       "end_at": "2028-06-01T04:00:00Z",
@@ -70,7 +70,7 @@
       "friendly_name": null,
       "apply_assignment_group_weights": false,
       "calendar": {
-        "ics": "https://canvas.cmu.edu/feeds/calendars/course_4rN978fyd9yExaC5wrSNyp3cFVsGWwPtlC2GEfoj.ics"
+        "ics": "https://canvas.example.edu/feeds/calendars/course_fixture-course-uuid-02.ics"
       },
       "time_zone": "America/Los_Angeles",
       "blueprint": false,
@@ -80,7 +80,7 @@
           "type": "student",
           "role": "StudentEnrollment",
           "role_id": 3,
-          "user_id": 151152,
+          "user_id": 1001,
           "enrollment_state": "active",
           "limit_privileges_to_course_section": false
         }
@@ -105,7 +105,7 @@
       "is_public": false,
       "grading_standard_id": null,
       "root_account_id": 1,
-      "uuid": "eRdYGbYKKUh1FHslVqqtFOX49gJw0ReSn4qDkQJE",
+      "uuid": "fixture-course-uuid-04",
       "license": "private",
       "grade_passback_setting": null,
       "end_at": null,
@@ -118,7 +118,7 @@
       "friendly_name": null,
       "apply_assignment_group_weights": false,
       "calendar": {
-        "ics": "https://canvas.cmu.edu/feeds/calendars/course_eRdYGbYKKUh1FHslVqqtFOX49gJw0ReSn4qDkQJE.ics"
+        "ics": "https://canvas.example.edu/feeds/calendars/course_fixture-course-uuid-04.ics"
       },
       "time_zone": "America/New_York",
       "blueprint": false,
@@ -128,7 +128,7 @@
           "type": "student",
           "role": "StudentEnrollment",
           "role_id": 3,
-          "user_id": 151152,
+          "user_id": 1001,
           "enrollment_state": "active",
           "limit_privileges_to_course_section": false
         }
@@ -157,7 +157,7 @@
       "is_public": false,
       "grading_standard_id": null,
       "root_account_id": 1,
-      "uuid": "bhbLLxSzMfSnBMevfTFDQDr97j11zEbI7rGczDGK",
+      "uuid": "fixture-course-uuid-07",
       "license": "private",
       "grade_passback_setting": null,
       "end_at": null,
@@ -170,7 +170,7 @@
       "friendly_name": null,
       "apply_assignment_group_weights": false,
       "calendar": {
-        "ics": "https://canvas.cmu.edu/feeds/calendars/course_bhbLLxSzMfSnBMevfTFDQDr97j11zEbI7rGczDGK.ics"
+        "ics": "https://canvas.example.edu/feeds/calendars/course_fixture-course-uuid-07.ics"
       },
       "time_zone": "America/Los_Angeles",
       "blueprint": false,
@@ -180,7 +180,7 @@
           "type": "student",
           "role": "StudentEnrollment",
           "role_id": 3,
-          "user_id": 151152,
+          "user_id": 1001,
           "enrollment_state": "active",
           "limit_privileges_to_course_section": false
         }
@@ -201,7 +201,7 @@
       "is_public": false,
       "grading_standard_id": null,
       "root_account_id": 1,
-      "uuid": "xYVdv2uGUSYlWGqWm9t1tJdGXEc4QesL45H0Ip7o",
+      "uuid": "fixture-course-uuid-08",
       "license": "private",
       "grade_passback_setting": null,
       "end_at": null,
@@ -214,7 +214,7 @@
       "friendly_name": null,
       "apply_assignment_group_weights": false,
       "calendar": {
-        "ics": "https://canvas.cmu.edu/feeds/calendars/course_xYVdv2uGUSYlWGqWm9t1tJdGXEc4QesL45H0Ip7o.ics"
+        "ics": "https://canvas.example.edu/feeds/calendars/course_fixture-course-uuid-08.ics"
       },
       "time_zone": "America/Los_Angeles",
       "blueprint": false,
@@ -224,7 +224,7 @@
           "type": "student",
           "role": "StudentEnrollment",
           "role_id": 3,
-          "user_id": 151152,
+          "user_id": 1001,
           "enrollment_state": "active",
           "limit_privileges_to_course_section": false
         }
@@ -245,7 +245,7 @@
       "is_public": false,
       "grading_standard_id": 6112,
       "root_account_id": 1,
-      "uuid": "gvzPycA2T5uykKfrtYWq30SNwFuIEyXfCw4GlWGe",
+      "uuid": "fixture-course-uuid-09",
       "license": "private",
       "grade_passback_setting": null,
       "end_at": "2026-12-20T08:00:00Z",
@@ -258,7 +258,7 @@
       "friendly_name": null,
       "apply_assignment_group_weights": true,
       "calendar": {
-        "ics": "https://canvas.cmu.edu/feeds/calendars/course_gvzPycA2T5uykKfrtYWq30SNwFuIEyXfCw4GlWGe.ics"
+        "ics": "https://canvas.example.edu/feeds/calendars/course_fixture-course-uuid-09.ics"
       },
       "time_zone": "America/Los_Angeles",
       "blueprint": false,
@@ -268,7 +268,7 @@
           "type": "student",
           "role": "StudentEnrollment",
           "role_id": 3,
-          "user_id": 151152,
+          "user_id": 1001,
           "enrollment_state": "active",
           "limit_privileges_to_course_section": false
         }
@@ -289,7 +289,7 @@
       "is_public": false,
       "grading_standard_id": 6185,
       "root_account_id": 1,
-      "uuid": "91307f71-e386-49e7-a115-520819cfd01d",
+      "uuid": "fixture-course-uuid-10",
       "license": "private",
       "grade_passback_setting": null,
       "end_at": null,
@@ -302,7 +302,7 @@
       "friendly_name": null,
       "apply_assignment_group_weights": true,
       "calendar": {
-        "ics": "https://canvas.cmu.edu/feeds/calendars/course_91307f71-e386-49e7-a115-520819cfd01d.ics"
+        "ics": "https://canvas.example.edu/feeds/calendars/course_fixture-course-uuid-10.ics"
       },
       "time_zone": "America/Los_Angeles",
       "blueprint": false,
@@ -312,7 +312,7 @@
           "type": "student",
           "role": "StudentEnrollment",
           "role_id": 3,
-          "user_id": 151152,
+          "user_id": 1001,
           "enrollment_state": "active",
           "limit_privileges_to_course_section": false
         }
@@ -333,7 +333,7 @@
       "is_public": false,
       "grading_standard_id": null,
       "root_account_id": 1,
-      "uuid": "0861b4b9-8a44-4d42-8a18-e592ac5c114d",
+      "uuid": "fixture-course-uuid-11",
       "license": "private",
       "grade_passback_setting": null,
       "end_at": null,
@@ -346,7 +346,7 @@
       "friendly_name": null,
       "apply_assignment_group_weights": false,
       "calendar": {
-        "ics": "https://canvas.cmu.edu/feeds/calendars/course_0861b4b9-8a44-4d42-8a18-e592ac5c114d.ics"
+        "ics": "https://canvas.example.edu/feeds/calendars/course_fixture-course-uuid-11.ics"
       },
       "time_zone": "America/Los_Angeles",
       "blueprint": false,
@@ -356,7 +356,7 @@
           "type": "student",
           "role": "StudentEnrollment",
           "role_id": 3,
-          "user_id": 151152,
+          "user_id": 1001,
           "enrollment_state": "active",
           "limit_privileges_to_course_section": false
         }
@@ -377,7 +377,7 @@
       "is_public": false,
       "grading_standard_id": null,
       "root_account_id": 1,
-      "uuid": "DsqINaXREtx8yPkwt2wwPh29AQJoVbbwdGaPfzi2",
+      "uuid": "fixture-course-uuid-12",
       "license": "private",
       "grade_passback_setting": null,
       "end_at": null,
@@ -390,7 +390,7 @@
       "friendly_name": null,
       "apply_assignment_group_weights": false,
       "calendar": {
-        "ics": "https://canvas.cmu.edu/feeds/calendars/course_DsqINaXREtx8yPkwt2wwPh29AQJoVbbwdGaPfzi2.ics"
+        "ics": "https://canvas.example.edu/feeds/calendars/course_fixture-course-uuid-12.ics"
       },
       "time_zone": "America/New_York",
       "blueprint": false,
@@ -400,7 +400,7 @@
           "type": "student",
           "role": "StudentEnrollment",
           "role_id": 3,
-          "user_id": 151152,
+          "user_id": 1001,
           "enrollment_state": "active",
           "limit_privileges_to_course_section": false
         }

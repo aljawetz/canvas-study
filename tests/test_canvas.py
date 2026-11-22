@@ -1,5 +1,6 @@
 """Replays real captured Canvas responses (tests/fixtures/canvas/) — no live
-Canvas access needed to run these. See implementation-plan.md Step 3."""
+Canvas access needed to run these. Identifiers and page text are replaced
+with placeholders; the shapes are Canvas's own."""
 
 import json
 from pathlib import Path
