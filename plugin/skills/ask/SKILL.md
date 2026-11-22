@@ -48,9 +48,6 @@ the question is about. If more than one could fit, ask the student which one.
 - For a follow-up ("and the final?", "explain the second one"), search with a version of the question
   that stands on its own ("When is the final exam?"), using the conversation to fill in what "it" or
   "the second one" means.
-- When the question uses a relative date ("tomorrow's lecture", "the reading for next week"), write
-  the real dates into the query the way a course page would ("Thursday, Oct 22"): pages never say
-  "tomorrow".
 - Search again with other wording when the results don't clearly answer the question. You can search
   more than once.
 - The only exception: the student only asks you to reformat or shorten your previous answer.
