@@ -1,7 +1,6 @@
-"""A 4-query retrieval smoke test over the real fixture files in
-tests/fixtures/ingestion/, with the real embedding model. One query ("what
-citation style should I choose") is from the original manual test; the
-other three were written against the extracted text of the same files.
+"""A 4-query retrieval smoke test over the documents in
+tests/fixtures/ingestion/ (make_ingestion_fixtures.py), with the real
+embedding model. The other files are there as distractors.
 """
 
 import tempfile
@@ -20,22 +19,22 @@ FIXTURES = Path(__file__).parent / "fixtures" / "ingestion"
 def retriever():
     nodes = []
 
-    zotero_pages = ingestion.extract_pdf(FIXTURES / "sprint3_zotero_tutorial.pdf")
-    for p in zotero_pages:
+    guide_pages = ingestion.extract_pdf(FIXTURES / "citation_guide.pdf")
+    for p in guide_pages:
         if p["needs_fallback"]:
             p["text"] = ingestion.merge_ocr_text(
-                p["text"], ingestion.ocr_pdf_page(FIXTURES / "sprint3_zotero_tutorial.pdf", p["page"])
+                p["text"], ingestion.ocr_pdf_page(FIXTURES / "citation_guide.pdf", p["page"])
             )
-    nodes += indexing.pages_to_nodes(zotero_pages, "zotero", "file_zotero")
+    nodes += indexing.pages_to_nodes(guide_pages, "zotero", "file_zotero")
 
-    slides = ingestion.extract_pptx(FIXTURES / "sprint3_ai_research.pptx")
+    slides = ingestion.extract_pptx(FIXTURES / "ai_assistant_slides.pptx")
     nodes += indexing.slides_to_nodes(slides, "ai_research", "file_ai_research")
 
     nodes += indexing.pages_to_nodes(
-        ingestion.extract_pdf(FIXTURES / "research_study.pdf"), "research_study", "file_research_study"
+        ingestion.extract_pdf(FIXTURES / "research_methods.pdf"), "research_methods", "file_research_methods"
     )
     nodes += indexing.pages_to_nodes(
-        ingestion.extract_pdf(FIXTURES / "literature_review.pdf"), "literature_review", "file_literature_review"
+        ingestion.extract_pdf(FIXTURES / "dense_article.pdf"), "dense_article", "file_dense_article"
     )
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -51,17 +50,15 @@ def _hit_rank(results, source, expected_pages):
     return None
 
 
-# rag-pipeline.md §4's key finding: OCR-recovered text (page 8's plain-text
-# extraction is too sparse to answer this — density-heuristic-flagged, see
-# tests/fixtures/ingestion_baseline.json) is still good enough as embedding
-# input for correct, top-ranked retrieval.
+# Page 8's answer exists only inside its image (the page's own text is a
+# footer), so this passes only if OCR-recovered text is good enough to embed
+# and rank first.
 def test_ocr_dependent_query_ranks_first(retriever):
     results = retriever.retrieve("What citation style should I choose?")
     assert _hit_rank(results, "zotero", {8}) == 1
 
 
-# Pages 3 and 4 are genuine near-duplicates (both titled "Installation",
-# near-identical opening text) — either is a correct answer.
+# Pages 3 and 4 are near-duplicates (both about installation): either is right.
 def test_install_query_hits_top_3(retriever):
     results = retriever.retrieve("How do I install Zotero?")
     assert _hit_rank(results, "zotero", {3, 4}) is not None
@@ -73,5 +70,5 @@ def test_collection_query_hits_top_3(retriever):
 
 
 def test_cross_file_query_hits_top_3(retriever):
-    results = retriever.retrieve("What is NVIDIA NeMo Retriever?")
+    results = retriever.retrieve("What is a vector database?")
     assert _hit_rank(results, "ai_research", {9}) is not None
