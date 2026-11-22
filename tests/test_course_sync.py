@@ -59,6 +59,7 @@ def no_front_page_syllabus_or_assignments(monkeypatch):
     monkeypatch.setattr(course_sync.canvas, "list_course_files", lambda course_id: [])
     monkeypatch.setattr(course_sync.canvas, "list_announcements", lambda course_id: [])
     monkeypatch.setattr(course_sync.canvas, "list_discussions", lambda course_id: [])
+    monkeypatch.setattr(course_sync.canvas, "list_quizzes", lambda course_id: [])
 
 
 @pytest.fixture
@@ -796,3 +797,81 @@ def test_outline_lists_linked_files_under_their_page_and_the_rest_in_their_own_g
         ("Announcements", "", "Room", "announcement"),
         ("Discussions", "", "Updates", "discussion"),
     ]
+
+
+QUIZ = {
+    "id": 4410, "title": "Quiz 3: Mutation Testing", "quiz_type": "assignment", "assignment_id": 990,
+    "description": "<p>Covers lectures 8 and 9.</p>", "due_at": "2026-11-21T07:59:00Z", "points_possible": 20,
+    "question_count": 10, "time_limit": 30, "allowed_attempts": 2, "published": True,
+}
+
+
+def test_quizzes_are_indexed_with_their_settings_and_replace_their_assignment(tmp_path, stub_extraction, monkeypatch):
+    monkeypatch.setattr(course_sync.canvas, "get_course_structure", lambda course_id: [])
+    monkeypatch.setattr(course_sync.canvas, "list_pages", lambda course_id: [])
+    monkeypatch.setattr(course_sync.canvas, "list_quizzes", lambda course_id: [dict(QUIZ)])
+    monkeypatch.setattr(
+        course_sync.canvas, "list_assignments",
+        lambda course_id: [{"id": 990, "name": "Quiz 3: Mutation Testing", "description": "<p>Covers lectures 8 and 9.</p>",
+                            "submission_types": ["online_quiz"], "updated_at": "2026-01-01"},
+                           {"id": 991, "name": "Lab 4", "description": "<p>Write mutants.</p>", "updated_at": "2026-01-01"}],
+    )
+    added = []
+    monkeypatch.setattr(course_sync.indexing, "add_nodes", lambda nodes, db_path, table_name: added.extend(nodes))
+
+    events = run(1, tmp_path)
+
+    assert events[-1]["new"] == 2
+    assert _manifest_ids(tmp_path) == {"quiz:4410", "assignment:991"}
+    quiz_text = " ".join(n.get_content() for n in added if n.metadata["item_type"] == "quiz")
+    for fact in ("Graded quiz.", "Worth 20 points.", "10 questions.", "Time limit: 30 minutes.", "2 attempts allowed.",
+                 "lectures 8 and 9"):
+        assert fact in quiz_text
+
+
+def test_an_edited_quiz_is_resynced_and_a_removed_one_deleted(tmp_path, stub_extraction, monkeypatch):
+    monkeypatch.setattr(course_sync.canvas, "get_course_structure", lambda course_id: [])
+    monkeypatch.setattr(course_sync.canvas, "list_pages", lambda course_id: [])
+    other = dict(QUIZ, id=4411, title="Practice quiz", quiz_type="practice_quiz", assignment_id=None)
+    monkeypatch.setattr(course_sync.canvas, "list_quizzes", lambda course_id: [dict(QUIZ), other])
+    run(1, tmp_path)
+
+    monkeypatch.setattr(course_sync.canvas, "list_quizzes", lambda course_id: [dict(other, time_limit=45)])
+    events = run(1, tmp_path)
+
+    assert events[-1] == {"done": True, "new": 0, "changed": 1, "removed": 1, "failed": 0}
+    assert _manifest_ids(tmp_path) == {"quiz:4411"}
+
+
+def test_quizzes_outside_modules_get_their_own_outline_group(tmp_path, stub_extraction, monkeypatch):
+    monkeypatch.setattr(course_sync.canvas, "get_course_structure",
+                        lambda course_id: [{"name": "Week 1", "items": [{"type": "Quiz", "title": "Quiz 3", "content_id": 4410}]}])
+    monkeypatch.setattr(course_sync.canvas, "list_pages", lambda course_id: [])
+    monkeypatch.setattr(course_sync.canvas, "list_quizzes",
+                        lambda course_id: [dict(QUIZ), dict(QUIZ, id=4412, title="Survey", assignment_id=None)])
+    run(1, tmp_path)
+
+    conn = course_sync.sync.open_manifest(tmp_path / "courses" / "1" / "manifest.db")
+    try:
+        rows = course_sync.course_items.load_outline(conn)
+    finally:
+        conn.close()
+    assert [(r["module"], r["title"]) for r in rows if r["item_type"] == "quiz"] == [("Week 1", "Quiz 3"), ("Quizzes", "Survey")]
+
+
+def test_quiz_details_say_unlimited_attempts_and_no_time_limit():
+    # Canvas sends allowed_attempts -1 for unlimited and a null time_limit for none.
+    quiz = {"quiz_type": "assignment", "question_count": 15, "time_limit": None, "allowed_attempts": -1}
+    assert course_sync.quiz_details(quiz) == "Graded quiz. 15 questions. No time limit. Unlimited attempts."
+
+
+def test_unpublished_quizzes_are_not_indexed(tmp_path, stub_extraction, monkeypatch):
+    # A token with more than student rights (a TA's) lists draft quizzes too.
+    monkeypatch.setattr(course_sync.canvas, "get_course_structure", lambda course_id: [])
+    monkeypatch.setattr(course_sync.canvas, "list_pages", lambda course_id: [])
+    draft = dict(QUIZ, id=4413, title="Final exam (draft)", assignment_id=None, published=False)
+    monkeypatch.setattr(course_sync.canvas, "list_quizzes", lambda course_id: [dict(QUIZ), draft])
+
+    run(1, tmp_path)
+
+    assert _manifest_ids(tmp_path) == {"quiz:4410"}

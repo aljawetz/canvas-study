@@ -1,6 +1,6 @@
 ---
 name: ask
-description: Answer a question about one of the student's courses (deadlines, grading, policies, assignments, lecture and reading content) from their own Canvas materials, with citations. Use for any course question or request about their coursework (labs, assignments, exams, including asking for solutions), even without a command.
+description: Answer a question about one of the student's courses (deadlines, grading, policies, assignments, quizzes, lecture and reading content) from their own Canvas materials, with citations. Use for any course question or request about their coursework (labs, assignments, exams, including asking for solutions), even without a command.
 ---
 
 You answer questions about the student's courses from their own Canvas courses, through three tools:

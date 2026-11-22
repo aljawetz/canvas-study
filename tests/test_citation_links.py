@@ -14,6 +14,7 @@ ORIGIN = "https://canvas.example.edu"
         ("page", "page:week-1-overview", f"{ORIGIN}/courses/56350/pages/week-1-overview"),
         ("assignment", "assignment:1020612", f"{ORIGIN}/courses/56350/assignments/1020612"),
         ("syllabus", "syllabus:56350", f"{ORIGIN}/courses/56350/assignments/syllabus"),
+        ("quiz", "quiz:4410", f"{ORIGIN}/courses/56350/quizzes/4410"),
         ("announcement", "announcement:7", f"{ORIGIN}/courses/56350/discussion_topics/7"),
         ("discussion", "discussion:5", f"{ORIGIN}/courses/56350/discussion_topics/5"),
         (None, "file:7", f"{ORIGIN}/courses/56350/files/7"),  # an unknown type is a file

@@ -219,3 +219,9 @@ def test_empty_url_setting_means_the_default(monkeypatch):
     monkeypatch.setenv("SM_CANVAS_URL", "")
 
     assert canvas.origin() == canvas.DEFAULT_ORIGIN
+
+
+@respx.mock
+def test_a_hidden_quizzes_tab_means_no_quizzes():
+    respx.get(f"{BASE}/courses/55016/quizzes").mock(return_value=httpx.Response(404, json={}))
+    assert canvas.list_quizzes(55016) == []

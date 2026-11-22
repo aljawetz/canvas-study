@@ -235,3 +235,13 @@ def get_file(file_id: int) -> dict | None:
     with _client() as client:
         r = _get(client, f"/files/{file_id}")
         return r.json() if r else None
+
+
+def list_quizzes(course_id: int) -> list[dict]:
+    """The course's Classic Quizzes: title, instructions ("description"),
+    type, time limit, attempts, question count and dates. Never the
+    questions. [] (403/404) when the course hides its Quizzes tab. New
+    Quizzes aren't listed here: Canvas serves them as assignments, which
+    list_assignments already reads."""
+    with _client() as client:
+        return _get_all(client, f"/courses/{course_id}/quizzes", params={"per_page": 50})
