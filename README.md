@@ -73,6 +73,10 @@ uv run pytest            # tests (the first run downloads the model into ./model
 claude plugin eval plugin/ --judge-model sonnet   # tool and skill evals (costs a few dollars)
 ```
 
+To release: bump the version in `plugin/.claude-plugin/plugin.json` and `plugin/server/version.py` (a test keeps
+them equal), add a `CHANGELOG.md` entry, merge, then tag it with `claude plugin tag plugin --push`. Installed copies
+only update when that version changes.
+
 To try the real install flow from a checkout, add it as a local marketplace:
 
 ```text
