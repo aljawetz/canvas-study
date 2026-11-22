@@ -20,7 +20,7 @@ class Block(importlib.abc.MetaPathFinder):
         if any(name == b or name.startswith(b + ".") for b in BLOCKED):
             raise ImportError(f"server imported blocked module {{name}}")
 sys.meta_path.insert(0, Block())
-import mcp_server, course_sync, course_items, generation, indexing, assignments, citation_links, query_dates, model_download, sync_jobs
+import mcp_server, course_sync, course_items, generation, indexing, assignments, citation_links, model_download, sync_jobs
 mcp_server.build_server()
 print("ok")
 """
