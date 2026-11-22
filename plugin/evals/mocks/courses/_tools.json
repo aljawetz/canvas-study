@@ -121,6 +121,23 @@
       }
     },
     {
+      "name": "get_grades",
+      "description": "Live from Canvas: the student's course total as Canvas computes it (current and final score and\nletter grade), whether the grade is weighted by category, and each category (Homework, Exams, ...)\nwith its weight, drop rules and the points graded so far. Report Canvas's course_total as the grade;\nthe per-category sums are before drop rules.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "course_id": {
+            "title": "Course Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "course_id"
+        ],
+        "title": "get_gradesArguments"
+      }
+    },
+    {
       "name": "sync_course",
       "description": "Download one course's materials from Canvas and index them so search_course_material can find them.\nRuns in the background (a few minutes the first time, faster after) and returns at once; check it\nwith sync_status. Ask the student before syncing a course.",
       "inputSchema": {

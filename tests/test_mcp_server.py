@@ -119,7 +119,7 @@ def test_tools_and_instructions_are_listed():
 
     tools, instructions = anyio.run(go)
     assert tools == {"list_courses", "search_course_material", "list_course_items", "list_assignments",
-                     "sync_course", "sync_status"}
+                     "get_grades", "sync_course", "sync_status"}
     assert "search_course_material before answering" in instructions
     assert "list_course_items" in instructions
 
@@ -451,6 +451,30 @@ def test_search_results_link_to_their_canvas_page(tmp_path, monkeypatch):
     out = searcher.search(COURSE, "late work")
 
     assert out["results"][0]["url"] == f"https://canvas.example.edu/courses/{COURSE}/assignments/syllabus"
+
+
+def test_get_grades_returns_canvas_total_and_groups(tmp_path):
+    course = {"apply_assignment_group_weights": True,
+              "enrollments": [{"type": "student", "computed_current_score": 88.0, "computed_current_grade": "B+"}]}
+    groups = [{"id": 1, "name": "Exams", "group_weight": 40, "assignments": []}]
+    server = mcp_server.build_server(tmp_path, courses_for=list, course_grades_for=lambda cid: course,
+                                     groups_for=lambda cid: groups)
+
+    out = _call(server, "get_grades", {"course_id": COURSE})
+
+    assert out["course_total"]["current_score"] == 88.0
+    assert out["groups"][0] == {"name": "Exams", "weight_percent": 40, "assignments": 0, "graded": 0,
+                                "graded_points": 0.0, "graded_possible": 0.0}
+    assert out["url"].endswith(f"/courses/{COURSE}/grades")
+
+
+def test_get_grades_without_canvas_says_why(tmp_path):
+    def fail(cid):
+        raise httpx.ConnectError("offline")
+
+    server = mcp_server.build_server(tmp_path, courses_for=list, course_grades_for=fail, groups_for=fail)
+
+    assert _call(server, "get_grades", {"course_id": COURSE})["note"].startswith("Canvas could not be reached")
 
 
 class _FakeJobs:

@@ -245,3 +245,26 @@ def list_quizzes(course_id: int) -> list[dict]:
     list_assignments already reads."""
     with _client() as client:
         return _get_all(client, f"/courses/{course_id}/quizzes", params={"per_page": 50})
+
+
+def list_assignment_groups(course_id: int) -> list[dict]:
+    """The grade categories (Homework, Exams, ...): name, group_weight,
+    drop rules, and each group's assignments with the student's own
+    submission, so per-category points can be summed without one call per
+    assignment."""
+    with _client() as client:
+        return _get_all(
+            client,
+            f"/courses/{course_id}/assignment_groups",
+            params={"include[]": ["assignments", "submission"], "per_page": 50},
+        )
+
+
+def get_course_grades(course_id: int) -> dict:
+    """The course with the student's own enrollment scores
+    (include[]=total_scores puts computed_current_score and friends on each
+    enrollment), plus apply_assignment_group_weights and hide_final_grades.
+    {} on 403/404."""
+    with _client() as client:
+        r = _get(client, f"/courses/{course_id}", params={"include[]": "total_scores"})
+        return r.json() if r else {}
