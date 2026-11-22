@@ -4,6 +4,7 @@ needs_fallback() marks the pages whose own text looks incomplete; those
 get OCR of their images merged in (see merge_ocr_text).
 """
 
+import logging
 import re
 from pathlib import Path
 
@@ -14,6 +15,8 @@ from docx.text.paragraph import Paragraph
 import openpyxl
 import pdfplumber
 import pytesseract
+
+logger = logging.getLogger("canvas-study")
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
@@ -304,7 +307,13 @@ def merge_ocr_text(native: str, ocr: str) -> str:
 
 
 def ocr_pdf_page(path: Path, page_number: int) -> str:
-    """Rasterize one PDF page (1-indexed) and run Tesseract on it."""
+    """Rasterize one PDF page (1-indexed) and run Tesseract on it. Without
+    the Tesseract program (most students don't have it) this returns "", so
+    the page keeps its own text instead of failing the whole file."""
     with pdfplumber.open(path) as pdf:
         rendered = pdf.pages[page_number - 1].to_image(resolution=200)
-        return pytesseract.image_to_string(rendered.original)
+        try:
+            return pytesseract.image_to_string(rendered.original)
+        except pytesseract.TesseractNotFoundError:
+            logger.warning("Tesseract is not installed; %s page %d indexed without OCR", path.name, page_number)
+            return ""

@@ -67,3 +67,15 @@ def test_ocr_is_used_alone_when_the_page_has_no_text_of_its_own():
 
 def test_empty_ocr_keeps_native_text():
     assert ingestion.merge_ocr_text("Upcoming Monday", "") == "Upcoming Monday"
+
+
+def test_a_missing_tesseract_leaves_the_page_text_alone(monkeypatch):
+    from pathlib import Path
+    import pytesseract
+
+    def not_installed(*args, **kwargs):
+        raise pytesseract.TesseractNotFoundError()
+
+    monkeypatch.setattr(pytesseract, "image_to_string", not_installed)
+    pdf = Path(__file__).parent / "fixtures" / "ingestion" / "citation_guide.pdf"
+    assert ingestion.ocr_pdf_page(pdf, 1) == ""
