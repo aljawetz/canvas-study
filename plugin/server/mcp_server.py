@@ -81,7 +81,7 @@ def indexed_course_ids(home: Path) -> list[int]:
     import lancedb
 
     ids = []
-    for name in lancedb.connect(str(db_path)).table_names():
+    for name in lancedb.connect(str(db_path)).list_tables().tables:
         prefix, _, rest = name.partition("_")
         if prefix == "course" and rest.isdigit():
             ids.append(int(rest))

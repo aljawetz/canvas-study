@@ -14,6 +14,7 @@ from typing import Any
 import lancedb
 import pyarrow as pa
 from lancedb.expr import col, lit
+from lancedb.index import FTS
 from llama_index.core import StorageContext, VectorStoreIndex, set_global_tokenizer
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import NodeRelationship, RelatedNodeInfo, TextNode
@@ -201,17 +202,17 @@ def load_index(db_path: Path, table_name: str) -> VectorStoreIndex:
 def index_exists(db_path: Path, table_name: str) -> bool:
     if not db_path.exists():
         return False
-    return table_name in lancedb.connect(str(db_path)).table_names()
+    return table_name in lancedb.connect(str(db_path)).list_tables().tables
 
 
 def ensure_fts_index(table) -> None:
     """BM25 full-text index for HybridRetriever (generation.py), which
     exact names and keywords need. Built only when missing: LanceDB keeps it
-    on the table. create_fts_index is deprecated, but its replacement
-    (create_index(config=FTS())) didn't take a column name when tried."""
+    on the table. Same settings and name (text_idx) as the deprecated
+    create_fts_index("text"), so indexes built before still match."""
     if any(getattr(i, "index_type", None) == "FTS" for i in table.list_indices()):
         return
-    table.create_fts_index("text", replace=True)
+    table.create_index("text", config=FTS(), replace=True)
 
 
 def add_nodes(nodes: list[TextNode], db_path: Path, table_name: str) -> None:
