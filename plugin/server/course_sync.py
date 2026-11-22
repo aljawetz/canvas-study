@@ -6,6 +6,7 @@ itself stays Canvas-agnostic (its own docstring: "the caller ... is
 responsible for the actual Canvas calls") — this module is that caller.
 """
 
+import os
 import re
 import sys
 import tempfile
@@ -54,8 +55,10 @@ def _sync_file(conn, db_path, table_name, file_meta, is_changed):
         indexing.delete_ref_doc_nodes(db_path, table_name, prefixed_id)
 
     raw = canvas.download(file_meta["url"])
-    tmp_path = Path(tempfile.mktemp(suffix=suffix))
-    tmp_path.write_bytes(raw)
+    fd, tmp_name = tempfile.mkstemp(suffix=suffix)
+    tmp_path = Path(tmp_name)
+    with os.fdopen(fd, "wb") as f:
+        f.write(raw)
     try:
         if suffix == ".pdf":
             pages = ingestion.extract_pdf(tmp_path)
@@ -266,7 +269,6 @@ def sync_course(course_id: int, sm_home: Path):
     syllabus."""
     manifest_path, db_path = _course_paths(sm_home, course_id)
     table_name = f"course_{course_id}"
-    conn = sync.open_manifest(manifest_path)
 
     try:
         structure = canvas.get_course_structure(course_id)
@@ -281,6 +283,21 @@ def sync_course(course_id: int, sm_home: Path):
         yield {"done": True, "error": str(e)}
         return
 
+    conn = sync.open_manifest(manifest_path)
+    try:
+        yield from _sync_items(
+            conn, course_id, db_path, table_name, structure, pages_list, front_page, syllabus_html,
+            assignments, files_tab, announcements, discussions,
+        )
+    finally:
+        conn.close()
+
+
+def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, front_page, syllabus_html,
+                assignments, files_tab, announcements, discussions):
+    """The rest of sync_course, once Canvas has answered: diff against the
+    manifest, then index, update and delete item by item. Split out so
+    sync_course can close the manifest whichever way this ends."""
     module_items = [item for module in structure for item in module.get("items", [])]
 
     new_count = changed_count = removed_count = failed_count = 0
