@@ -26,6 +26,8 @@ jobs:
           path: models
           key: bge-small-5c38ec7c
       - run: uv sync
+      - name: The server's pinned versions match uv.lock
+        run: ./scripts/export-constraints && git diff --exit-code plugin/server/constraints.txt
       - run: uv run pytest -q
       - name: The plugin's server builds and starts
         run: plugin/scripts/server --version
