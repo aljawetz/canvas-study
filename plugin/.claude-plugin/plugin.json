@@ -7,7 +7,24 @@
     "name": "Arthur Jawetz"
   },
   "repository": "https://github.com/aljawetz/canvas-study",
+  "homepage": "https://github.com/aljawetz/canvas-study",
   "license": "MIT",
+  "keywords": [
+    "canvas",
+    "lms",
+    "students",
+    "study",
+    "courses",
+    "deadlines"
+  ],
+  "network": {
+    "hosts": [
+      "pypi.org",
+      "files.pythonhosted.org",
+      "huggingface.co",
+      "astral.sh"
+    ]
+  },
   "userConfig": {
     "canvas_base_url": {
       "type": "string",
