@@ -42,6 +42,19 @@ def test_a_sync_reports_counts_and_its_summary(tmp_path):
     assert status["summary"] == {"new": 2, "changed": 0, "removed": 0, "failed": 1}
     assert status["finished_at"] and "phase" not in status
     assert finished == [COURSE]  # the server drops its cached retriever here
+    assert status["failures"] == [{"item": "c.pdf", "error": "403"}]
+
+
+def test_only_the_last_failures_are_kept(tmp_path):
+    failed = [{"item": f"f{i}.pdf", "status": "failed", "error": f"err {i}"} for i in range(15)]
+    jobs = sync_jobs.SyncJobs(tmp_path, run=_events(*failed), ensure_model=lambda: None)
+
+    jobs.start(COURSE, wait=True)
+
+    status = sync_jobs.read_status(tmp_path, COURSE)
+    assert status["items_failed"] == 15
+    assert [f["item"] for f in status["failures"]] == [f"f{i}.pdf" for i in range(5, 15)]
+    assert status["failures"][-1]["error"] == "err 14"
 
 
 def test_a_course_sync_error_is_a_failed_sync(tmp_path):
