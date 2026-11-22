@@ -142,8 +142,7 @@ def _sync_assignment(conn, db_path, table_name, assignment, is_changed):
     if schedule:
         sections.insert(0, {"heading": "Due date and points", "text": schedule})
     text = ingestion.sections_text(sections)
-    # Own item_type: citations.ts opens /assignments/<id>, and explain.py's
-    # pointers exclude these (see build_pointers).
+    # Own item_type: citation_links.py opens /assignments/<id>.
     nodes = indexing.sections_to_nodes(sections, name, prefixed_id, item_type="assignment")
     if nodes:
         indexing.add_nodes(nodes, db_path, table_name)
@@ -158,7 +157,7 @@ def _sync_syllabus(conn, db_path, table_name, course_id, syllabus_html, version,
 
     sections = ingestion.extract_html_sections(syllabus_html)
     text = ingestion.sections_text(sections)
-    # Own item_type so citations.ts can open Canvas's syllabus URL
+    # Own item_type so citation_links.py can open Canvas's syllabus URL
     # (/assignments/syllabus), which isn't under /pages/.
     nodes = indexing.sections_to_nodes(sections, "Syllabus", prefixed_id, item_type="syllabus")
     if nodes:
@@ -245,7 +244,7 @@ def _sync_topic(conn, db_path, table_name, topic, kind, is_changed):
     if posted:
         sections.insert(0, {"heading": "Posted", "text": posted})
     text = ingestion.sections_text(sections)
-    # Own item_type: citations.ts opens /discussion_topics/<id> for both.
+    # Own item_type: citation_links.py opens /discussion_topics/<id> for both.
     nodes = indexing.sections_to_nodes(sections, title, prefixed_id, item_type=kind)
     if nodes:
         indexing.add_nodes(nodes, db_path, table_name)
