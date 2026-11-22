@@ -1,4 +1,4 @@
-"""Course sync orchestrator — docs/superpowers/specs/2026-09-20-course-sync-phase1-design.md.
+"""Course sync orchestrator: one course from Canvas into the local index.
 
 Wires canvas.py + ingestion.py + indexing.py together via sync.py's
 manifest-diff mechanism into a real, incremental sync pipeline. sync.py

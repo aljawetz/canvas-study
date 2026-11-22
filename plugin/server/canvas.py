@@ -122,9 +122,10 @@ def download(url: str, max_retries: int = 3) -> bytes:
 
 def _get_all(client: httpx.Client, path: str, params: dict | None = None) -> list:
     """Follow Link-header pagination across every page. A 403/404 on the
-    endpoint itself degrades to [] rather than raising — canvas-integration.md
-    §2 (a 403 here isn't distinguishable from "genuinely empty" without a
-    logging layer we don't have yet; both degrade the same way for now)."""
+    endpoint itself degrades to [] rather than raising: student tokens get
+    403s on whole listings (a hidden Files tab, a restricted course section),
+    and a 403 here can't be told apart from "genuinely empty", so both degrade
+    the same way."""
     items: list = []
     url = path
     first = True
@@ -220,7 +221,7 @@ def get_course_structure(course_id: int) -> list[dict]:
 
 def list_course_files(course_id: int) -> list[dict]:
     """The bulk Files-tab listing. It 403s (degrading to []) when the
-    course hides its Files tab from students (canvas-integration.md §2);
+    course hides its Files tab from students;
     when the tab is shown it lists files no module does (24 of 56350's 31).
     One of course_sync's three ways to find files, with module items and
     links in the course's own pages."""

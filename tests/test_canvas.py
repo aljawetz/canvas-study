@@ -55,7 +55,7 @@ def test_course_structure_success():
 
 @respx.mock
 def test_course_structure_403_degrades_to_empty():
-    """canvas-integration.md §2: get_course_structure can 403 for an entire
+    """get_course_structure can 403 for an entire
     course/section — real case, course 55709 (one of the two 18654-SV IDs)."""
     fx = load("course_structure_403")
     respx.get(f"{BASE}/courses/55709/modules").mock(return_value=httpx.Response(fx["status"], json=fx["body"]))
@@ -77,7 +77,7 @@ def test_configured_base_url_is_used_instead_of_default(monkeypatch):
 
 @respx.mock
 def test_list_course_files_403_degrades_to_empty():
-    """canvas-integration.md §2: the bulk Files-tab listing 403s under a
+    """The bulk Files-tab listing 403s under a
     student token — real case, course 56350."""
     fx = load("list_course_files_403")
     respx.get(f"{BASE}/courses/56350/files").mock(return_value=httpx.Response(fx["status"], json=fx["body"]))
