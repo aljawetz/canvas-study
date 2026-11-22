@@ -1,0 +1,54 @@
+# Canvas Study
+
+Ask Claude about your Canvas courses: what's due, what your slides, readings and syllabus say, and help studying
+the material. Every course fact links back to the Canvas page it came from. It won't write your graded work.
+
+Unofficial. Not made by or affiliated with Instructure, the maker of Canvas.
+
+## Setup
+
+In Claude Code:
+
+```text
+/plugin install canvas-study --marketplace aljawetz/canvas-study
+```
+
+Claude Code then asks for your Canvas URL and a Canvas access token (Canvas > Account >
+Settings > Approved Integrations > **+ New Access Token**). Then run `/canvas-study:setup` and pick your courses.
+
+Works on macOS and Linux.
+
+## What it runs, sends and fetches
+
+**Runs on your computer**
+
+- A local MCP server (`scripts/server`, Python source in `server/`), started by Claude Code.
+- `uv`, to install and run that server. If `uv` isn't installed, the plugin downloads a pinned version (0.9.28)
+  from `astral.sh` into its own data folder. It doesn't touch your `PATH` or shell profile.
+- A `SessionStart` hook (`scripts/session-start`) that only checks whether a course is indexed yet.
+- Tesseract, only if you already have it installed, to read text in image-only PDF pages. Without it those pages
+  are indexed with whatever text they have.
+
+**Talks to**
+
+- **Your Canvas** (the URL you set): reads your courses, modules, pages, files, assignments, announcements and
+  discussions with your token. It never writes to Canvas.
+- **PyPI**, once, to download the server's Python packages at the exact versions in `server/constraints.txt`.
+- **Hugging Face**, once, to download the search model
+  ([BAAI/bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5), pinned to one revision).
+
+**Never**
+
+- It calls no AI service. Your questions and course content stay between you, Claude Code and your own Claude
+  account.
+- It sends no analytics or telemetry.
+
+## Your data
+
+- The Canvas token is stored in your system keychain by Claude Code, not in a file.
+- Downloaded course material and the search index live in the plugin's data folder,
+  `~/.claude/plugins/data/canvas-study-canvas-study/`. Uninstalling the plugin deletes it.
+
+## License
+
+MIT. Source: <https://github.com/aljawetz/canvas-study>
