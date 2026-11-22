@@ -59,6 +59,7 @@ Search is hybrid (vector + keyword, rank fusion) over a local LanceDB index, wit
 ```bash
 uv sync                  # dev environment
 uv run pytest            # tests (the first run downloads the model into ./models)
+./scripts/export-constraints   # after changing dependencies and `uv lock`: re-pins the students' server
 ./plugin/dev.sh          # Claude Code with this checkout's plugin and nothing else
 claude plugin eval plugin/ --judge-model sonnet   # tool and skill evals (costs a few dollars)
 ```

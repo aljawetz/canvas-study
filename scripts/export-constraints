@@ -1,0 +1,16 @@
+#!/bin/sh
+# Writes plugin/server/constraints.txt from uv.lock: the exact versions every
+# student's server installs (plugin/scripts/server passes it to uvx). Run it
+# after `uv lock`; CI runs it too and fails if the committed file differs.
+set -eu
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+OUT="$ROOT/plugin/server/constraints.txt"
+{
+  echo "# Exact versions for the plugin's server, from uv.lock. plugin/scripts/server passes this to"
+  echo "# uvx as --constraints, so every student gets the versions the tests ran against."
+  echo "# Regenerate after changing dependencies (CI fails if it is out of date):"
+  echo "#   uv lock && ./scripts/export-constraints"
+  cd "$ROOT"
+  uv export --frozen --only-group dev --no-emit-local --no-hashes --no-header --no-annotate \
+    --prune pytest --prune respx
+} > "$OUT"
