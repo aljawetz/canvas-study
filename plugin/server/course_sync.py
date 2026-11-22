@@ -252,6 +252,62 @@ def _sync_topic(conn, db_path, table_name, topic, kind, is_changed):
     return title
 
 
+QUIZ_TYPES = {
+    "assignment": "Graded quiz",
+    "practice_quiz": "Practice quiz (not graded)",
+    "graded_survey": "Graded survey",
+    "survey": "Survey (not graded)",
+}
+
+
+def quiz_details(quiz: dict, tz: tzinfo | None = None) -> str:
+    """"Graded quiz. Due Fri, Nov 20, 2026 at 11:59 PM PST. Worth 20 points.
+    10 questions. Time limit: 30 minutes. 2 attempts allowed." Facts Canvas
+    keeps on the quiz record, not in its instructions."""
+    parts = [f"{QUIZ_TYPES.get(quiz.get('quiz_type'), 'Quiz')}."]
+    schedule = schedule_line(quiz, tz)
+    if schedule:
+        parts.append(schedule)
+    count = quiz.get("question_count")
+    if isinstance(count, int) and count > 0:
+        parts.append(f"{count} question{'' if count == 1 else 's'}.")
+    limit = quiz.get("time_limit")
+    parts.append(f"Time limit: {limit} minutes." if limit else "No time limit.")
+    attempts = quiz.get("allowed_attempts")
+    if attempts == -1:
+        parts.append("Unlimited attempts.")
+    elif isinstance(attempts, int) and attempts > 0:
+        parts.append(f"{attempts} attempt{'' if attempts == 1 else 's'} allowed.")
+    return " ".join(parts)
+
+
+def _quiz_sections(quiz: dict) -> list[dict]:
+    sections = ingestion.extract_html_sections(quiz.get("description") or "")
+    sections.insert(0, {"heading": "Quiz details", "text": quiz_details(quiz)})
+    return sections
+
+
+def _quiz_version(quiz: dict) -> str:
+    """Quizzes carry no updated_at, so what gets indexed stands in, as for
+    the syllabus and topics: a new due date or time limit reads as changed."""
+    return sync.content_hash(f"{quiz.get('title') or ''}\n{ingestion.sections_text(_quiz_sections(quiz))}")
+
+
+def _sync_quiz(conn, db_path, table_name, quiz, is_changed):
+    """A quiz's instructions and settings. Never its questions."""
+    prefixed_id = f"quiz:{quiz['id']}"
+    title = (quiz.get("title") or "").strip() or f"Quiz {quiz['id']}"
+    if is_changed:
+        indexing.delete_ref_doc_nodes(db_path, table_name, prefixed_id)
+    sections = _quiz_sections(quiz)
+    text = ingestion.sections_text(sections)
+    nodes = indexing.sections_to_nodes(sections, title, prefixed_id, item_type="quiz")
+    if nodes:
+        indexing.add_nodes(nodes, db_path, table_name)
+    sync.mark_synced(conn, prefixed_id, "quiz", title, _quiz_version(quiz), sync.content_hash(text))
+    return title
+
+
 def sync_course(course_id: int, sm_home: Path):
     """Generator. Yields {"item", "status", "error"?} per processed item, then
     exactly one final {"done": True, "new", "changed", "removed", "failed"}
@@ -261,7 +317,7 @@ def sync_course(course_id: int, sm_home: Path):
     records how the sync ended.
 
     Everything a student reaches from the course menu, not only Modules:
-    Home, Syllabus, Pages, Assignments, Announcements, Discussions and Files.
+    Home, Syllabus, Pages, Assignments, Quizzes, Announcements, Discussions and Files.
     Files are found three ways: module items, the Files tab when the course
     shows it, and links in the text of all the others. 18-658 lists no files
     in its Modules; all 46 of its readings are links in its pages and
@@ -278,6 +334,7 @@ def sync_course(course_id: int, sm_home: Path):
         files_tab = canvas.list_course_files(course_id)
         announcements = canvas.list_announcements(course_id)
         discussions = canvas.list_discussions(course_id)
+        quizzes = canvas.list_quizzes(course_id)
     except (canvas.CanvasError, httpx.HTTPStatusError, httpx.TransportError) as e:
         yield {"done": True, "error": str(e)}
         return
@@ -286,14 +343,14 @@ def sync_course(course_id: int, sm_home: Path):
     try:
         yield from _sync_items(
             conn, course_id, db_path, table_name, structure, pages_list, front_page, syllabus_html,
-            assignments, files_tab, announcements, discussions,
+            assignments, files_tab, announcements, discussions, quizzes,
         )
     finally:
         conn.close()
 
 
 def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, front_page, syllabus_html,
-                assignments, files_tab, announcements, discussions):
+                assignments, files_tab, announcements, discussions, quizzes=()):
     """The rest of sync_course, once Canvas has answered: diff against the
     manifest, then index, update and delete item by item. Split out so
     sync_course can close the manifest whichever way this ends."""
@@ -360,6 +417,16 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
         if syllabus_html and ingestion.extract_html_page(syllabus_html).strip():
             syllabus_remote = [{"id": f"syllabus:{course_id}", "updated_at": sync.content_hash(syllabus_html)}]
 
+        # Classic Quizzes, with their time limit, attempts and question
+        # count. A graded quiz is also an assignment ("online_quiz") with the
+        # same text: it is indexed once, as the quiz, so the two don't take
+        # two of search's few result slots.
+        quizzes_by_id = {str(q["id"]): q for q in quizzes if q.get("id") is not None and q.get("published", True)}
+        quiz_assignment_ids = {str(q["assignment_id"]) for q in quizzes_by_id.values() if q.get("assignment_id")}
+        quiz_remote = [
+            {"id": f"quiz:{qid}", "updated_at": _quiz_version(q)} for qid, q in quizzes_by_id.items()
+        ]
+
         # Assignment instructions, so chat can answer "what does Task 2 ask
         # for?" (Explain only ever read one assignment at a time) and "when is it
         # due?". Ones with neither text nor a due date or points are left out;
@@ -368,7 +435,8 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
         assignments_by_id = {
             str(a["id"]): a
             for a in assignments
-            if (a.get("description") and ingestion.extract_html_page(a["description"]).strip()) or schedule_line(a)
+            if ((a.get("description") and ingestion.extract_html_page(a["description"]).strip()) or schedule_line(a))
+            and str(a["id"]) not in quiz_assignment_ids
         }
         assignment_remote = [
             {"id": f"assignment:{aid}", "updated_at": a.get("updated_at", "")} for aid, a in assignments_by_id.items()
@@ -390,6 +458,7 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
         page_links = {url: _linked_file_ids(p.get("body") or "", course_id) for url, p in pages_by_url.items()}
         other_html = [syllabus_html or ""] + [a.get("description") or "" for a in assignments]
         other_html += [t.get("message") or "" for t in [*announcements, *discussions]]
+        other_html += [q.get("description") or "" for q in quizzes_by_id.values()]
         known_metas = {str(f["id"]): f for f in files_tab if f.get("id") is not None}
         for topic in [*announcements, *discussions]:
             for attachment in topic.get("attachments") or []:
@@ -449,6 +518,7 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
         in_modules = {str(item.get("content_id")) for item in module_items if item.get("type") == "File"}
         in_modules |= {fid for url in module_page_urls for fid in page_links.get(url, [])}
         module_topics = {str(item.get("content_id")) for item in module_items if item.get("type") == "Discussion"}
+        module_quizzes = {str(item.get("content_id")) for item in module_items if item.get("type") == "Quiz"}
         outline += course_items.group_rows(
             "Other course files", sorted(n for fid, n in all_file_names.items() if fid not in in_modules), "file"
         )
@@ -460,6 +530,11 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
             [(t.get("title") or "").strip() for t in discussions if str(t.get("id")) not in module_topics],
             "discussion",
         )
+        outline += course_items.group_rows(
+            "Quizzes",
+            [(q.get("title") or "").strip() for qid, q in quizzes_by_id.items() if qid not in module_quizzes],
+            "quiz",
+        )
         if outline:
             course_items.save_outline(conn, outline)
 
@@ -468,6 +543,7 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
         syllabus_diff = sync.diff(conn, "syllabus", syllabus_remote)
         assignment_diff = sync.diff(conn, "assignment", assignment_remote)
         topic_diffs = {kind: sync.diff(conn, kind, remote) for kind, remote in topic_remote.items()}
+        quiz_diff = sync.diff(conn, "quiz", quiz_remote)
 
         file_deleted = _deletable(file_remote, file_diff["deleted"], unresolved_file_ids) if links_complete else []
         page_deleted = _deletable(page_remote, page_diff["deleted"], unresolved_page_ids)
@@ -485,6 +561,7 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
             ("syllabus", syllabus_deleted),
             ("assignment", assignment_deleted),
             *topic_deleted.items(),
+            ("quiz", _deletable(quiz_remote, quiz_diff["deleted"], set())),
         ]
         for item_type, deleted_ids in deletions:
             for event in _sync_deleted(conn, db_path, table_name, item_type, deleted_ids):
@@ -554,6 +631,18 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
                     except Exception as e:
                         failed_count += 1
                         yield {"item": topic.get("title") or prefixed_id, "status": "failed", "error": str(e)}
+
+        for ids, is_changed in ((quiz_diff["new"], False), (quiz_diff["changed"], True)):
+            for prefixed_id in ids:
+                quiz = quizzes_by_id[prefixed_id.removeprefix("quiz:")]
+                try:
+                    name = _sync_quiz(conn, db_path, table_name, quiz, is_changed)
+                    yield {"item": name, "status": "done"}
+                    changed_count += is_changed
+                    new_count += not is_changed
+                except Exception as e:
+                    failed_count += 1
+                    yield {"item": quiz.get("title") or prefixed_id, "status": "failed", "error": str(e)}
     except Exception as e:
         yield {"done": True, "error": str(e)}
         return

@@ -31,8 +31,8 @@ Works on macOS and Linux.
 
 **Talks to**
 
-- **Your Canvas** (the URL you set): reads your courses, modules, pages, files, assignments, announcements and
-  discussions with your token. It never writes to Canvas.
+- **Your Canvas** (the URL you set): reads your courses, modules, pages, files, assignments, quizzes (settings and
+  instructions, never the questions), announcements and discussions with your token. It never writes to Canvas.
 - **PyPI**, once, to download the server's Python packages at the exact versions in `server/constraints.txt`.
 - **Hugging Face**, once, to download the search model
   ([BAAI/bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5), pinned to one revision).
