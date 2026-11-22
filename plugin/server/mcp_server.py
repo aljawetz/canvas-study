@@ -9,6 +9,8 @@ here calls a model. Its tools:
   added about 0.2 s a search and no hit@5, and it is one less model to download.
 - list_course_items: a synced course's module outline, for complete lists.
 - list_assignments: deadlines, status, scores and rubrics, live from Canvas.
+- get_grades: the course total Canvas computed, plus grade categories with
+  their weights and drop rules, live.
 - sync_course / sync_status: index a course in the background (sync_jobs.py).
 
 An indexed course refreshes itself: a search or listing of a course whose
@@ -42,6 +44,7 @@ import assignments
 import canvas
 import citation_links
 import course_items
+import grades
 import indexing
 import sync
 import sync_jobs
@@ -61,7 +64,8 @@ INSTRUCTIONS = (
     "a follow-up search with a stand-alone version of the question. Deadlines, what is due, submission "
     "status, scores and rubrics: call list_assignments, which reads Canvas live. Show its times exactly as "
     "due_at_display gives them (already in the student's time zone) and use due_in for how far away they "
-    "are; never convert a time or guess a zone yourself. Complete lists of what a course has (every reading "
+    "are; never convert a time or guess a zone yourself. The student's overall grade, or how much a category "
+    "(exams, homework) is worth: call get_grades. Complete lists of what a course has (every reading "
     "in week 3, all the quizzes): call list_course_items, which lists names only; search for what an item "
     "says. Course facts come only from tool results, cited "
     "with their source label as a markdown link to its url when it has one, like "
@@ -337,6 +341,17 @@ def list_assignments_result(home: Path, course_id: int, fetch, days: int, only_u
     return {"course_id": course_id, **assignments.upcoming(raw, days, only_unsubmitted, tz=zone())}
 
 
+def get_grades_result(course_id: int, course_for=canvas.get_course_grades,
+                      groups_for=canvas.list_assignment_groups) -> dict:
+    try:
+        course, groups = course_for(course_id), groups_for(course_id)
+    except CANVAS_ERRORS as e:
+        logger.warning("get_grades without Canvas: %s", e)
+        return {"course_id": course_id, "note": f"{_canvas_failure(e)}, so grades can't be read right now."}
+    url = f"{canvas.origin()}/courses/{course_id}/grades"
+    return {"course_id": course_id, **grades.summary(course, groups, url)}
+
+
 def sync_course_result(jobs: "sync_jobs.SyncJobs", course_id: int, token_check=canvas._token) -> dict:
     try:
         token_check()
@@ -356,7 +371,8 @@ def sync_status_result(home: Path, course_id: int | None) -> dict:
 
 
 def build_server(home: Path | None = None, searcher: Searcher | None = None, courses_for=canvas.list_courses,
-                 assignments_for=canvas.list_assignments, zone_for=None, jobs=None) -> MCPServer:
+                 assignments_for=canvas.list_assignments, zone_for=None, jobs=None,
+                 course_grades_for=canvas.get_course_grades, groups_for=canvas.list_assignment_groups) -> MCPServer:
     home = home or sm_home()
     searcher = searcher or Searcher(home)
     jobs = jobs or sync_jobs.SyncJobs(home, on_done=searcher.forget)
@@ -404,6 +420,14 @@ def build_server(home: Path | None = None, searcher: Searcher | None = None, cou
         assignment_id: that one assignment's description, rubric, submission and score."""
         return list_assignments_result(home, course_id, assignments_for, days, only_unsubmitted, assignment_id,
                                        zone_for)
+
+    @server.tool()
+    def get_grades(course_id: int) -> dict:
+        """Live from Canvas: the student's course total as Canvas computes it (current and final score and
+        letter grade), whether the grade is weighted by category, and each category (Homework, Exams, ...)
+        with its weight, drop rules and the points graded so far. Report Canvas's course_total as the grade;
+        the per-category sums are before drop rules."""
+        return get_grades_result(course_id, course_grades_for, groups_for)
 
     @server.tool()
     def sync_course(course_id: int) -> dict:

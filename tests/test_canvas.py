@@ -225,3 +225,17 @@ def test_empty_url_setting_means_the_default(monkeypatch):
 def test_a_hidden_quizzes_tab_means_no_quizzes():
     respx.get(f"{BASE}/courses/55016/quizzes").mock(return_value=httpx.Response(404, json={}))
     assert canvas.list_quizzes(55016) == []
+
+
+@respx.mock
+def test_list_assignment_groups_includes_assignments_and_submissions():
+    route = respx.get(f"{BASE}/courses/55016/assignment_groups").mock(return_value=httpx.Response(200, json=[]))
+    canvas.list_assignment_groups(55016)
+    assert route.calls[0].request.url.params.get_list("include[]") == ["assignments", "submission"]
+
+
+@respx.mock
+def test_get_course_grades_asks_for_total_scores():
+    route = respx.get(f"{BASE}/courses/55016").mock(return_value=httpx.Response(200, json={"id": 55016}))
+    assert canvas.get_course_grades(55016) == {"id": 55016}
+    assert route.calls[0].request.url.params["include[]"] == "total_scores"

@@ -3,6 +3,7 @@
 A Claude Code plugin that lets you ask Claude about your Canvas courses:
 
 - **What's due:** deadlines, submission status, scores and rubrics, read live from Canvas and shown in your time zone.
+- **Your grades:** your course total as Canvas computes it, and how much each category (labs, exams) is worth.
 - **What the course says:** answers from your slides, readings, syllabus and Canvas pages, each fact linked to the Canvas page it came from.
 - **Help studying:** explanations grounded in your own course material. It won't write your graded work for you.
 
@@ -51,13 +52,13 @@ Uninstalling the plugin deletes its data folder.
 | --- | --- |
 | `plugin/skills/setup` | `/canvas-study:setup`: gets the server and model ready, checks the token, syncs the courses you pick |
 | `plugin/skills/ask` | Routes course questions to the right tool, cites sources as Canvas links, refuses graded work |
-| `plugin/server` | The MCP server: `list_courses`, `search_course_material`, `list_course_items`, `list_assignments`, `sync_course`, `sync_status` |
+| `plugin/server` | The MCP server: `list_courses`, `search_course_material`, `list_course_items`, `list_assignments`, `get_grades`, `sync_course`, `sync_status` |
 | `plugin/scripts/server` | Starts the server with `uv` (installed into the plugin's data folder if missing) |
 | `plugin/hooks` | Points you to setup until a course is indexed |
 
 An indexed course keeps itself current: when Claude searches a course whose last sync is over 6 hours old, the
 server starts an incremental sync in the background (only new or changed items are re-read) and answers from the
-index meanwhile. Deadlines are always read live.
+index meanwhile. Deadlines and grades are always read live.
 
 Search is hybrid (vector + keyword, rank fusion) over a local LanceDB index, with the
 [bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5) embedding model running on your machine.
