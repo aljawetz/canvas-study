@@ -20,7 +20,6 @@ while it owns the channel, so a stray print from another module lands in
 stderr instead of breaking the protocol; logging goes to stderr too.
 """
 
-import datetime
 import json
 import logging
 import os
@@ -69,13 +68,6 @@ INSTRUCTIONS = (
 
 def sm_home() -> Path:
     return Path(os.environ.get("SM_HOME", str(Path.home() / ".canvas-study")))
-
-
-def today() -> datetime.date:
-    """SM_TODAY (YYYY-MM-DD) pins the date relative-date expansion uses, so an
-    eval run is reproducible. Unset: the real date."""
-    pinned = os.environ.get("SM_TODAY")
-    return datetime.date.fromisoformat(pinned) if pinned else datetime.date.today()
 
 
 def _table(course_id: int) -> str:
@@ -184,10 +176,9 @@ class Searcher:
     """One retriever per course, built on first use: loading the index opens
     the embedding model (downloaded first if missing), the slow part."""
 
-    def __init__(self, home: Path, make_retriever=None, today_fn: Callable[[], datetime.date] = today):
+    def __init__(self, home: Path, make_retriever=None):
         self._home = home
         self._make = make_retriever or _retriever_factory(home)
-        self._today = today_fn
         self._retrievers: dict[int, object] = {}
 
     def forget(self, course_id: int) -> None:
@@ -197,7 +188,6 @@ class Searcher:
 
     def search(self, course_id: int, query: str, k: int = DEFAULT_K) -> dict:
         import generation
-        import query_dates
 
         k = max(1, min(int(k), MAX_K))
         # Checked only until the course's retriever exists: a missing course
@@ -216,8 +206,7 @@ class Searcher:
         start = time.perf_counter()
         if course_id not in self._retrievers:
             self._retrievers[course_id] = self._make(course_id)
-        expanded = query_dates.expand_relative_dates(query, self._today())
-        nodes = list(self._retrievers[course_id].retrieve(expanded))[:k]
+        nodes = list(self._retrievers[course_id].retrieve(query))[:k]
         citations = generation.build_citations(nodes)
         origin = canvas.origin()
         results = [
@@ -232,7 +221,7 @@ class Searcher:
         seconds = time.perf_counter() - start
         logger.info("search course=%s query=%r results=%d seconds=%.2f", course_id, query, len(results), seconds)
         _log_query(course_id, query, results, seconds)
-        out = {"course_id": course_id, "query": expanded, "results": results}
+        out = {"course_id": course_id, "query": query, "results": results}
         if not results:
             out["note"] = NO_RESULTS
         return out

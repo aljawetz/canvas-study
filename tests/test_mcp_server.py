@@ -82,14 +82,14 @@ def _build_index(home: Path, course_id: int = COURSE, pages=_PAGES) -> VectorSto
     return index
 
 
-def _searcher(home: Path, index: VectorStoreIndex, today=datetime.date(2026, 10, 21)):
+def _searcher(home: Path, index: VectorStoreIndex):
     calls = []
 
     def make(course_id):
         calls.append(course_id)
         return mcp_server.make_retriever(index)
 
-    return mcp_server.Searcher(home, make_retriever=make, today_fn=lambda: today), calls
+    return mcp_server.Searcher(home, make_retriever=make), calls
 
 
 def _call(server, name: str, arguments: dict | None = None) -> dict:
@@ -176,13 +176,15 @@ def test_search_returns_more_than_five_when_k_asks(tmp_path):
     assert len(searcher.search(COURSE, "rubric")["results"]) == mcp_server.DEFAULT_K
 
 
-def test_search_expands_relative_dates_with_the_pinned_day(tmp_path):
+def test_search_returns_the_query_exactly_as_sent(tmp_path):
+    # Relative dates ("tomorrow") are Claude's to resolve (skills/ask); the
+    # server searches and reports the query unchanged.
     index = _build_index(tmp_path)
-    searcher, _ = _searcher(tmp_path, index, today=datetime.date(2026, 10, 21))
+    searcher, _ = _searcher(tmp_path, index)
 
     out = searcher.search(COURSE, "what is due tomorrow")
 
-    assert out["query"] == "what is due tomorrow Oct 22 2026"
+    assert out["query"] == "what is due tomorrow"
 
 
 def test_query_log_records_each_search_when_set(tmp_path, monkeypatch):
