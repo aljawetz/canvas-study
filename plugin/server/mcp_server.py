@@ -11,6 +11,11 @@ here calls a model. Its tools:
 - list_assignments: deadlines, status, scores and rubrics, live from Canvas.
 - sync_course / sync_status: index a course in the background (sync_jobs.py).
 
+An indexed course refreshes itself: a search or listing of a course whose
+last sync finished over REFRESH_AFTER ago starts an incremental sync in the
+background and answers from the index as it is, saying so. Only courses the
+student already chose to index; a new course still needs sync_course.
+
 Data lives in SM_HOME, the plugin's data folder (.mcp.json sets it). Models
 load on the first search, not at startup, so a session that never asks about
 a course costs almost nothing.
@@ -25,6 +30,7 @@ import logging
 import os
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
 
@@ -88,7 +94,58 @@ def indexed_course_ids(home: Path) -> list[int]:
     return sorted(ids)
 
 
+# How old an index may get before using it starts a background refresh. A
+# refresh with no changes only lists Canvas: nothing is downloaded or embedded.
+REFRESH_AFTER = timedelta(hours=6)
+# After a failed or interrupted sync (Canvas down, token expired), wait this
+# long before trying again, so every search doesn't hit a failing Canvas.
+RETRY_AFTER = timedelta(minutes=30)
+
+
+def _parse_time(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+
+
+def refresh_if_stale(home: Path, jobs: "sync_jobs.SyncJobs", course_id: int, token_check=None,
+                     now: datetime | None = None) -> str | None:
+    """Starts a background sync of an indexed course whose last sync is old,
+    and returns a note for the answer; None when the index is fresh enough
+    (or isn't there: syncing a new course is the student's call)."""
+    if not indexing.index_exists(home / "index.lancedb", _table(course_id)):
+        return None
+    now = now or datetime.now(timezone.utc)
+    status = sync_jobs.read_status(home, course_id) or {}
+    state = status.get("state")
+    if state == "running":
+        return "This course is being refreshed from Canvas right now; results come from the last sync."
+    finished = _parse_time(status.get("finished_at"))
+    wait = REFRESH_AFTER if state == "done" else RETRY_AFTER
+    if finished and now - finished < wait:
+        return None
+    try:
+        (token_check or canvas._token)()
+    except canvas.CanvasError:
+        return None
+    started = jobs.start(course_id)
+    if not started.get("started") and started.get("state") != "running":
+        return None
+    since = f" of {status['finished_at']}" if finished else ""
+    return (f"Refreshing this course from Canvas in the background; these results come from the last sync{since}. "
+            "Only new or changed items are re-read.")
+
+
 def last_synced_at(home: Path, course_id: int) -> str | None:
+    """When the last sync finished. The manifest's own times only move when
+    an item changes, so a sync that found nothing new is read from its status."""
+    status = sync_jobs.read_status(home, course_id) or {}
+    if status.get("state") == "done" and status.get("finished_at"):
+        return status["finished_at"]
     manifest = home / "courses" / str(course_id) / "manifest.db"
     if not manifest.exists():
         return None
@@ -318,7 +375,11 @@ def build_server(home: Path | None = None, searcher: Searcher | None = None, cou
     def search_course_material(course_id: int, query: str, k: int = DEFAULT_K) -> dict:
         """Search one course's materials. Returns up to k chunks, each with a source label to cite and,
         when the item is in Canvas, the url of its Canvas page."""
-        return searcher.search(course_id, query, k)
+        out = searcher.search(course_id, query, k)
+        refresh = refresh_if_stale(home, jobs, course_id)
+        if refresh:
+            out["refresh"] = refresh
+        return out
 
     @server.tool()
     def list_course_items(course_id: int, topic: str = "", types: list[str] | None = None) -> dict:
@@ -327,8 +388,12 @@ def build_server(home: Path | None = None, searcher: Searcher | None = None, cou
         which search can't answer completely. topic narrows it to a module, section or title ("week 3");
         types to item kinds (file, page, assignment, quiz, discussion, link, tool, announcement). Names
         only: search_course_material for what an item says."""
-        return {"listing": course_items.list_for_course(home, course_id, topic, types),
-                "url": f"{canvas.origin()}/courses/{course_id}/modules"}
+        out = {"listing": course_items.list_for_course(home, course_id, topic, types),
+               "url": f"{canvas.origin()}/courses/{course_id}/modules"}
+        refresh = refresh_if_stale(home, jobs, course_id)
+        if refresh:
+            out["refresh"] = refresh
+        return out
 
     @server.tool()
     def list_assignments(course_id: int, days: int = assignments.DEFAULT_DAYS, only_unsubmitted: bool = False,

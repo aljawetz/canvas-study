@@ -55,6 +55,10 @@ Uninstalling the plugin deletes its data folder.
 | `plugin/scripts/server` | Starts the server with `uv` (installed into the plugin's data folder if missing) |
 | `plugin/hooks` | Points you to setup until a course is indexed |
 
+An indexed course keeps itself current: when Claude searches a course whose last sync is over 6 hours old, the
+server starts an incremental sync in the background (only new or changed items are re-read) and answers from the
+index meanwhile. Deadlines are always read live.
+
 Search is hybrid (vector + keyword, rank fusion) over a local LanceDB index, with the
 [bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5) embedding model running on your machine.
 
