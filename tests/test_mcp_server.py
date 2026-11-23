@@ -1,4 +1,4 @@
-"""MCP server for the Claude Code plugin (mcp_server.py, plan M0).
+"""MCP server for the Claude Code plugin (mcp_server.py).
 
 In-process tests go through mcp's Client against the real server object, so
 they check MCP responses, not just the Python functions. One test runs the

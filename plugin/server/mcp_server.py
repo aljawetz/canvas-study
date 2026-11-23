@@ -5,8 +5,9 @@ here calls a model. Its tools:
 - list_courses: the student's Canvas courses, each marked indexed or not.
 - search_course_material: hybrid search (vector + BM25, rank fusion, 0.5
   cutoff) over the course's indexed materials, returning whole chunks with
-  their citation labels and Canvas links. No reranker: on the heldout set it
-  added about 0.2 s a search and no hit@5, and it is one less model to download.
+  their citation labels and Canvas links. No reranker: measured before this
+  repo was split out (that query set isn't here), it added about 0.2 s a search
+  and no hit@5, and it is one less model to download.
 - list_course_items: a synced course's module outline, for complete lists.
 - list_assignments: deadlines, status, scores and rubrics, live from Canvas.
 - get_grades: the course total Canvas computed, plus grade categories with
