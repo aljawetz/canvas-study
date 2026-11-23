@@ -12,6 +12,7 @@ import logging
 import os
 import re
 import sys
+import time
 from pathlib import Path
 
 import anyio
@@ -559,3 +560,33 @@ def test_search_says_when_the_course_is_refreshing(tmp_path, monkeypatch):
 def test_last_synced_at_comes_from_the_last_finished_sync(tmp_path):
     _status(tmp_path, "done", "2026-11-21T15:00:00Z")
     assert mcp_server.last_synced_at(tmp_path, COURSE) == "2026-11-21T15:00:00Z"
+
+
+def test_list_courses_writes_the_session_note_for_indexed_courses(tmp_path):
+    _build_index(tmp_path)
+    courses = [{"id": COURSE, "name": "Software Requirements"}, {"id": 999, "name": "Not indexed"}]
+
+    mcp_server.list_courses_result(tmp_path, courses_for=lambda: courses)
+
+    text = json.loads((tmp_path / "session_start.json").read_text())["hookSpecificOutput"]["additionalContext"]
+    assert "Software Requirements" in text and "Not indexed" not in text
+
+
+def test_a_finished_sync_rewrites_the_session_note(tmp_path, monkeypatch):
+    _build_index(tmp_path)
+    mcp_server.session_note.remember_names(tmp_path, {COURSE: "Software Requirements"})
+    monkeypatch.setenv("SM_CANVAS_TOKEN", "t")
+    monkeypatch.setattr(mcp_server.sync_jobs, "_default_ensure_model", lambda: None)
+    monkeypatch.setattr(mcp_server.sync_jobs, "_default_run",
+                        lambda cid, home: iter([{"done": True, "new": 0, "changed": 0, "removed": 0, "failed": 0}]))
+    searcher, _ = _searcher(tmp_path, None)
+    server = mcp_server.build_server(tmp_path, searcher=searcher, courses_for=list)
+    assert not (tmp_path / "session_start.json").exists()
+
+    assert _call(server, "sync_course", {"course_id": COURSE})["started"] is True
+    for _ in range(100):  # the sync runs on a thread
+        if (tmp_path / "session_start.json").exists():
+            break
+        time.sleep(0.05)
+
+    assert "Software Requirements" in (tmp_path / "session_start.json").read_text()

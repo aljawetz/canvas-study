@@ -25,7 +25,8 @@ Works on macOS and Linux.
 - A local MCP server (`scripts/server`, Python source in `server/`), started by Claude Code.
 - `uv`, to install and run that server. If `uv` isn't installed, the plugin downloads a pinned version (0.9.28)
   from `astral.sh` into its own data folder. It doesn't touch your `PATH` or shell profile.
-- A `SessionStart` hook (`scripts/session-start`) that only checks whether a course is indexed yet.
+- A `SessionStart` hook (`scripts/session-start`) that points you to setup until a course is indexed, and after
+  that tells Claude the names of your indexed courses (read from a file in the data folder; it calls nothing).
 - Tesseract, only if you already have it installed, to read text in image-only PDF pages. Without it those pages
   are indexed with whatever text they have.
 

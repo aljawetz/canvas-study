@@ -46,6 +46,7 @@ import citation_links
 import course_items
 import grades
 import indexing
+import session_note
 import sync
 import sync_jobs
 
@@ -188,6 +189,8 @@ def list_courses_result(home: Path, courses_for: Callable[[], list[dict]] = canv
     ]
     listed = {r["course_id"] for r in rows}
     rows += [_course_row(home, cid, None, True) for cid in ids if cid not in listed]
+    session_note.remember_names(home, {r["course_id"]: r["name"] for r in rows if r["name"]})
+    session_note.write_note(home, ids)
     return {"courses": rows}
 
 
@@ -371,7 +374,11 @@ def build_server(home: Path | None = None, searcher: Searcher | None = None, cou
                  course_grades_for=canvas.get_course_grades, groups_for=canvas.list_assignment_groups) -> MCPServer:
     home = home or sm_home()
     searcher = searcher or Searcher(home)
-    jobs = jobs or sync_jobs.SyncJobs(home, on_done=searcher.forget)
+    def synced(course_id: int) -> None:
+        searcher.forget(course_id)
+        session_note.write_note(home, indexed_course_ids(home))
+
+    jobs = jobs or sync_jobs.SyncJobs(home, on_done=synced)
     zone_for = zone_for or canvas_zone()
     server = MCPServer("canvas-study", instructions=INSTRUCTIONS)
 
