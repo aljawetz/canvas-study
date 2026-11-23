@@ -20,9 +20,11 @@ DEFAULT_DAYS = 14
 MAX_DAYS = 60
 OVERDUE_DAYS = 7
 MAX_ROWS = 12
-# Assignment descriptions run long (whole specs pasted into Canvas); the
-# rubric and dates matter more than the tail of the prose.
-DESCRIPTION_CHARS = 4000
+# Assignment descriptions are often the whole lab spec pasted into Canvas.
+# The longest seen in real courses was 18,666 characters (~4.7k tokens);
+# 30,000 keeps a detail result under the 10k-token size Claude Code warns
+# about. Past that, the result says it was cut and where to resume.
+DESCRIPTION_CHARS = 30_000
 
 # Canvas sends UTC. The model must never convert it: in testing it picked
 # the wrong zone (from the canvas.cmu.edu URL) and then did the arithmetic
@@ -202,9 +204,11 @@ def _rubric(assignment: dict) -> dict | None:
     }
 
 
-def detail(assignment: dict, now: datetime | None = None, tz: tzinfo | None = None) -> dict:
+def detail(assignment: dict, now: datetime | None = None, tz: tzinfo | None = None,
+           description_offset: int = 0) -> dict:
     """One assignment in full: what to hand in, how it is graded, and where
-    the student stands. The score and grade are the student's own."""
+    the student stands. The score and grade are the student's own.
+    description_offset: where to start the description, to read past a cut."""
     now = now or datetime.now(timezone.utc)
     tz = tz or machine_zone()
     submission = assignment.get("submission") or {}
@@ -213,10 +217,11 @@ def detail(assignment: dict, now: datetime | None = None, tz: tzinfo | None = No
         moment = _parse(assignment.get(key))
         return when(moment, tz, now) if moment else None
 
-    description = _text(assignment.get("description") or "")
-    if len(description) > DESCRIPTION_CHARS:
-        description = description[:DESCRIPTION_CHARS] + "…"
-    return {
+    full = _text(assignment.get("description") or "")
+    start = min(max(int(description_offset), 0), len(full))
+    description = full[start:start + DESCRIPTION_CHARS]
+    end = start + len(description)
+    out = {
         "assignment_id": assignment["id"],
         "name": assignment.get("name") or f"Assignment {assignment['id']}",
         "timezone": zone_name(tz),
@@ -236,6 +241,14 @@ def detail(assignment: dict, now: datetime | None = None, tz: tzinfo | None = No
         },
         "url": assignment.get("html_url"),
     }
+    if start or end < len(full):
+        out["description_cut"] = {
+            "shown": [start, end],
+            "total_chars": len(full),
+            "note": (f"Description is {len(full)} characters; this shows {start} to {end}. "
+                     + (f"Call again with description_offset={end} for the rest." if end < len(full) else "")).strip(),
+        }
+    return out
 
 
 def from_index_rows(rows: list[dict], reason: str) -> dict:
