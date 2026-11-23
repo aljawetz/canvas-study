@@ -45,7 +45,7 @@ COURSE = 55016
 class _HashEmbedding(BaseEmbedding):
     """Bag of words hashed into the real width: offline and deterministic.
     Scores stay under the 0.5 cutoff, so the keyword (BM25) hit is what comes
-    back, through the real HybridRetriever."""
+    back, through the real HybridSearcher."""
 
     def _embed(self, text: str) -> list[float]:
         vec = np.zeros(EMBEDDING_DIM, dtype=np.float64)
@@ -97,9 +97,9 @@ def _searcher(home: Path, index: VectorStoreIndex):
 
     def make(course_id):
         calls.append(course_id)
-        return mcp_server.make_retriever(index)
+        return mcp_server.make_searcher(index.vector_store.table, _HashEmbedding().get_query_embedding)
 
-    return mcp_server.Searcher(home, make_retriever=make), calls
+    return mcp_server.Searcher(home, make_searcher=make), calls
 
 
 def _call(server, name: str, arguments: dict | None = None) -> dict:
@@ -215,7 +215,7 @@ def test_query_log_records_each_search_when_set(tmp_path, monkeypatch):
 
 
 def test_search_on_a_course_with_no_index_says_so(tmp_path):
-    searcher = mcp_server.Searcher(tmp_path, make_retriever=lambda cid: pytest.fail("must not open an index"))
+    searcher = mcp_server.Searcher(tmp_path, make_searcher=lambda cid: pytest.fail("must not open an index"))
 
     out = searcher.search(999, "anything")
 
@@ -226,7 +226,7 @@ def test_search_on_a_course_with_no_index_says_so(tmp_path):
 def test_query_log_records_a_search_on_a_course_with_no_index(tmp_path, monkeypatch):
     log = tmp_path / "queries.jsonl"
     monkeypatch.setenv("SM_QUERY_LOG", str(log))
-    searcher = mcp_server.Searcher(tmp_path, make_retriever=lambda cid: pytest.fail("must not open an index"))
+    searcher = mcp_server.Searcher(tmp_path, make_searcher=lambda cid: pytest.fail("must not open an index"))
 
     searcher.search(999, "anything")
 

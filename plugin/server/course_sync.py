@@ -99,7 +99,7 @@ def _sync_page(conn, db_path, table_name, course_id, page_summary, is_changed):
     sections = ingestion.extract_html_sections((full or {}).get("body") or "")
     text = ingestion.sections_text(sections)
     # item_type="page": a Canvas wiki page isn't paginated like a PDF —
-    # generation.py's citation formatting reads item_type back as
+    # retrieval.py's citation formatting reads item_type back as
     # source_type, so this must say "page", not "file", and carries no
     # fabricated page number.
     nodes = indexing.sections_to_nodes(sections, title, prefixed_id, item_type="page")

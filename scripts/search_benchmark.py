@@ -22,37 +22,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "plugin" / "serv
 K = 10
 
 
-def ranked_labels(nodes) -> list[str]:
-    import generation
-
-    return [c["label"] for c in generation.build_citations(nodes)]
-
-
 def searchers(home: Path, course_id: int):
-    """mode -> query -> ranked citation labels, all on one loaded index."""
-    from llama_index.core.postprocessor import SimilarityPostprocessor
-    from llama_index.core.schema import NodeWithScore, QueryBundle
-    from llama_index.core.vector_stores.utils import metadata_dict_to_node
-
-    import generation
+    """mode -> query -> ranked citation labels, all on one table, with the server's own search."""
     import indexing
     import mcp_server
+    import retrieval
 
-    index = indexing.load_index(home / "index.lancedb", f"course_{course_id}")
-    hybrid = mcp_server.make_retriever(index)
-    table = index.vector_store.table
+    searcher = mcp_server.make_searcher(indexing.open_table(home / "index.lancedb", f"course_{course_id}"),
+                                        mcp_server._query_embedder())
 
-    def vector(q):
-        nodes = index.as_retriever(similarity_top_k=generation.VECTOR_CANDIDATES).retrieve(QueryBundle(q))
-        nodes = SimilarityPostprocessor(similarity_cutoff=generation.SIMILARITY_CUTOFF).postprocess_nodes(nodes)
-        return ranked_labels(nodes[:K])
+    def labels(hits):
+        return [retrieval.citation(h)["label"] for h in hits[:K]]
 
-    def fts(q):
-        df = table.search(q, query_type="fts").limit(K).to_pandas()
-        return ranked_labels([NodeWithScore(node=metadata_dict_to_node(r["metadata"]), score=float(r["_score"]))
-                              for _, r in df.iterrows()])
-
-    return {"hybrid": lambda q: ranked_labels(list(hybrid.retrieve(q))[:K]), "vector": vector, "fts": fts}
+    return {"hybrid": lambda q: labels(searcher.search(q)), "vector": lambda q: labels(searcher.vector(q)),
+            "fts": lambda q: labels(searcher.keyword(q))}
 
 
 def score(labels: list[str], expected: list[str]) -> tuple[int, int, float]:

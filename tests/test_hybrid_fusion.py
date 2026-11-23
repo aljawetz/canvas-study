@@ -1,45 +1,43 @@
-"""Rank fusion in HybridRetriever (Sprint 8). No index, no network: small
-stand-in nodes and a stand-in index so only the merge logic is tested."""
+"""retrieval.py: rank fusion and the hybrid search around it. No index, no
+network: a stand-in LanceDB table, so only the search logic is tested."""
 
-import pandas as pd
-from llama_index.core.schema import NodeWithScore, QueryBundle, TextNode
+import pytest
 
-import generation
-from generation import HybridRetriever, reciprocal_rank_fusion
-
-
-def _n(node_id, score=0.5):
-    return NodeWithScore(node=TextNode(id_=node_id, text=node_id), score=score)
+import retrieval
+from retrieval import Hit, HybridSearcher, reciprocal_rank_fusion
 
 
-def _ids(nodes):
-    return [n.node.node_id for n in nodes]
+def _h(hit_id, score=0.5):
+    return Hit(id=hit_id, text=hit_id, metadata={}, item_id=f"file:{hit_id}", score=score)
 
 
-def test_node_in_both_lists_ranks_first():
-    vector = [_n("a"), _n("b"), _n("c")]
-    keyword = [_n("c"), _n("d")]
+def _ids(hits):
+    return [h.id for h in hits]
+
+
+def test_hit_in_both_lists_ranks_first():
+    vector = [_h("a"), _h("b"), _h("c")]
+    keyword = [_h("c"), _h("d")]
     # c: 1/63 + 1/61, a: 1/61, d: 1/62, b: 1/62. Ties keep first-seen order.
     assert _ids(reciprocal_rank_fusion([vector, keyword], k=60, top_n=5)) == ["c", "a", "b", "d"]
 
 
 def test_fusion_uses_rank_not_raw_score():
-    vector = [_n("a", 0.9), _n("b", 0.8)]
-    keyword = [_n("b", 40.0)]
+    vector = [_h("a", 0.9), _h("b", 0.8)]
+    keyword = [_h("b", 40.0)]
     assert _ids(reciprocal_rank_fusion([vector, keyword])) == ["b", "a"]
 
 
 def test_duplicates_are_kept_once_with_their_first_score():
-    vector = [_n("a", 0.7), _n("a", 0.6)]
-    keyword = [_n("a", 12.0)]
+    vector = [_h("a", 0.7), _h("a", 0.6)]
+    keyword = [_h("a", 12.0)]
     fused = reciprocal_rank_fusion([vector, keyword])
     assert _ids(fused) == ["a"]
     assert fused[0].score == 0.7
 
 
 def test_top_n_cuts_the_list():
-    vector = [_n(str(i)) for i in range(20)]
-    assert len(reciprocal_rank_fusion([vector, []], top_n=5)) == 5
+    assert len(reciprocal_rank_fusion([[_h(str(i)) for i in range(20)], []], top_n=5)) == 5
 
 
 def test_empty_inputs_give_empty_result():
@@ -47,59 +45,79 @@ def test_empty_inputs_give_empty_result():
     assert reciprocal_rank_fusion([[], []]) == []
 
 
-class _Table:
-    def __init__(self, rows):
-        self._rows = rows
+def _row(hit_id, **extra):
+    return {"id": hit_id, "text": f"text {hit_id}", "doc_id": f"file:{hit_id}",
+            "metadata": {"source": f"{hit_id}.pdf", "page": 1, "item_type": "file", "_node_content": "{}"}, **extra}
 
-    def search(self, _query, query_type):
-        assert query_type == "fts"
+
+class _Query:
+    def __init__(self, table, kind, rows):
+        self._table, self._kind, self._rows = table, kind, rows
+
+    def distance_type(self, name):
+        self._table.distance = name
         return self
 
     def limit(self, n):
-        self.limit_used = n
+        self._table.limits[self._kind] = n
         return self
 
-    def to_pandas(self):
-        return pd.DataFrame(self._rows, columns=["metadata", "_score"])
+    def to_list(self):
+        return list(self._rows)
 
 
-class _Index:
-    def __init__(self, vector_nodes, fts_rows):
-        self._vector_nodes = vector_nodes
-        self.vector_store = type("Store", (), {"table": _Table(fts_rows)})()
-        self.top_k_used = None
+class _Table:
+    """Answers vector searches with rows carrying _distance, full-text ones with _score."""
 
-    def as_retriever(self, similarity_top_k):
-        self.top_k_used = similarity_top_k
-        nodes = self._vector_nodes
-        return type("R", (), {"retrieve": lambda _self, _q: list(nodes)})()
+    def __init__(self, vector_rows, fts_rows):
+        self._vector, self._fts = vector_rows, fts_rows
+        self.limits, self.distance = {}, None
 
-
-def _patch_metadata(monkeypatch):
-    monkeypatch.setattr(generation, "metadata_dict_to_node", lambda meta: TextNode(id_=meta["id"], text=meta["id"]))
+    def search(self, query, query_type=None, vector_column_name=None):
+        if query_type == "fts":
+            return _Query(self, "fts", self._fts)
+        assert isinstance(query, list) and vector_column_name == "vector"
+        return _Query(self, "vector", self._vector)
 
 
-def test_keyword_only_hit_surfaces(monkeypatch):
-    _patch_metadata(monkeypatch)
-    vector = [_n(f"v{i}", 0.9 - i * 0.01) for i in range(8)]
-    index = _Index(vector, [({"id": "kw"}, 7.5)])
-    result = HybridRetriever(index, similarity_cutoff=0.0).retrieve(QueryBundle("Mockito"))
-    assert "kw" in _ids(result)
-    assert len(result) == 5
-    kw = next(n for n in result if n.node.node_id == "kw")
-    assert kw.score == 7.5  # keeps its own score
+def _searcher(vector_rows, fts_rows, cutoff=0.0):
+    return HybridSearcher(_Table(vector_rows, fts_rows), embed=lambda q: [0.1, 0.2], cutoff=cutoff)
 
 
-def test_retriever_fetches_more_candidates_and_dedupes(monkeypatch):
-    _patch_metadata(monkeypatch)
-    index = _Index([_n("a", 0.9), _n("b", 0.8)], [({"id": "b"}, 3.0), ({"id": "c"}, 2.0)])
-    result = HybridRetriever(index, similarity_cutoff=0.0).retrieve(QueryBundle("q"))
-    assert _ids(result) == ["b", "a", "c"]
-    assert index.top_k_used == generation.VECTOR_CANDIDATES == 20
-    assert index.vector_store.table.limit_used == generation.FTS_TOP_K == 10
+def test_vector_scores_are_cosine_similarity_and_the_cutoff_drops_weak_hits():
+    s = _searcher([_row("near", _distance=0.2), _row("far", _distance=0.5)], [], cutoff=retrieval.SIMILARITY_CUTOFF)
+    hits = s.vector("q")
+    assert _ids(hits) == ["near"]
+    assert hits[0].score == pytest.approx(0.8)
+    assert s._table.distance == "cosine"
 
 
-def test_retriever_with_no_hits_returns_nothing(monkeypatch):
-    _patch_metadata(monkeypatch)
-    index = _Index([], [])
-    assert HybridRetriever(index).retrieve(QueryBundle("nothing")) == []
+def test_the_cutoff_is_the_old_exp_l2_threshold_in_cosine_terms():
+    # Old rule: keep exp(-squared L2) >= 0.5; for unit vectors squared L2 = 2 - 2 cos.
+    import math
+    for cos in (0.60, 0.65, 0.66, 0.80):
+        assert (math.exp(-(2 - 2 * cos)) >= 0.5) == (cos >= retrieval.SIMILARITY_CUTOFF)
+
+
+def test_keyword_only_hit_surfaces_with_its_own_score():
+    vector = [_row(f"v{i}", _distance=0.1 + i * 0.01) for i in range(8)]
+    hits = _searcher(vector, [_row("kw", _score=7.5)]).search("Mockito")
+    assert "kw" in _ids(hits) and len(hits) == 5
+    assert next(h for h in hits if h.id == "kw").score == 7.5
+
+
+def test_search_fetches_more_candidates_and_dedupes():
+    s = _searcher([_row("a", _distance=0.1), _row("b", _distance=0.2)], [_row("b", _score=3.0), _row("c", _score=2.0)])
+    assert _ids(s.search("q")) == ["b", "a", "c"]
+    assert s._table.limits == {"vector": retrieval.VECTOR_CANDIDATES, "fts": retrieval.FTS_TOP_K}
+
+
+def test_hits_carry_text_citation_fields_and_no_internal_metadata():
+    hit = _searcher([], [_row("x", _score=1.0)]).search("q")[0]
+    assert hit.text == "text x" and hit.item_id == "file:x"
+    assert "_node_content" not in hit.metadata
+    assert retrieval.citation(hit) == {"source_type": "file", "label": "x.pdf · p.1", "item_id": "file:x"}
+
+
+def test_no_hits_returns_nothing():
+    assert _searcher([], []).search("nothing") == []

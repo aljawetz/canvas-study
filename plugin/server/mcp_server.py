@@ -211,22 +211,32 @@ def backfill_course_names(home: Path, courses_for: Callable[[], list[dict]] = ca
     session_note.write_note(home, ids)
 
 
-def make_retriever(index):
-    """The search retriever for one index. It returns MAX_K, not its default 5, so search's [:k] can reach MAX_K;
-    fusion orders before it cuts, so the first 5 of 10 are the same top 5."""
-    import generation  # lazy: it loads model code that list_courses never needs
+def make_searcher(table, embed):
+    """The searcher for one course's table. It returns MAX_K, not its default 5, so search's [:k] can reach
+    MAX_K; fusion orders before it cuts, so the first 5 of 10 are the same top 5."""
+    import retrieval
 
-    return generation.HybridRetriever(
-        index, similarity_top_k=MAX_K, similarity_cutoff=generation.SIMILARITY_CUTOFF
-    )
+    return retrieval.HybridSearcher(table, embed, top_k=MAX_K)
 
 
-def _retriever_factory(home: Path):
-    def make(course_id: int):
+_embed_query = None
+
+
+def _query_embedder():
+    """One embedding model for every course, loaded on the first search (the slow part)."""
+    global _embed_query
+    if _embed_query is None:
+        import embeddings
         import model_download
 
         model_download.ensure_embedding_model()
-        return make_retriever(indexing.load_index(home / "index.lancedb", _table(course_id)))
+        _embed_query = embeddings.OnnxBgeEmbedding().get_query_embedding
+    return _embed_query
+
+
+def _searcher_factory(home: Path):
+    def make(course_id: int):
+        return make_searcher(indexing.open_table(home / "index.lancedb", _table(course_id)), _query_embedder())
 
     return make
 
@@ -250,26 +260,25 @@ def _log_query(course_id: int, query: str, results: list[dict], seconds: float) 
 
 
 class Searcher:
-    """One retriever per course, built on first use: loading the index opens
-    the embedding model (downloaded first if missing), the slow part."""
+    """One searcher per course, built on its first search."""
 
-    def __init__(self, home: Path, make_retriever=None):
+    def __init__(self, home: Path, make_searcher=None):
         self._home = home
-        self._make = make_retriever or _retriever_factory(home)
-        self._retrievers: dict[int, object] = {}
+        self._make = make_searcher or _searcher_factory(home)
+        self._searchers: dict[int, object] = {}
 
     def forget(self, course_id: int) -> None:
-        """Drop a course's retriever after a sync, so the next search opens
-        the index as the sync left it."""
-        self._retrievers.pop(course_id, None)
+        """Drop a course's searcher after a sync, so the next search opens
+        the table as the sync left it."""
+        self._searchers.pop(course_id, None)
 
     def search(self, course_id: int, query: str, k: int = DEFAULT_K) -> dict:
-        import generation
+        import retrieval
 
         k = max(1, min(int(k), MAX_K))
-        # Checked only until the course's retriever exists: a missing course
+        # Checked only until the course's searcher exists: a missing course
         # is not cached, so it is found once a sync creates its table.
-        if course_id not in self._retrievers and not indexing.index_exists(self._home / "index.lancedb", _table(course_id)):
+        if course_id not in self._searchers and not indexing.index_exists(self._home / "index.lancedb", _table(course_id)):
             # Logged too, so the eval sees the tool call even though nothing came back.
             _log_query(course_id, query, [], 0.0)
             return {
@@ -281,19 +290,19 @@ class Searcher:
                 ),
             }
         start = time.perf_counter()
-        if course_id not in self._retrievers:
-            self._retrievers[course_id] = self._make(course_id)
-        nodes = list(self._retrievers[course_id].retrieve(query))[:k]
-        citations = generation.build_citations(nodes)
+        if course_id not in self._searchers:
+            self._searchers[course_id] = self._make(course_id)
+        hits = self._searchers[course_id].search(query)[:k]
+        citations = [retrieval.citation(hit) for hit in hits]
         origin = canvas.origin()
         results = [
             {
                 "n": n,
                 "source": citation["label"],
                 "url": citation_links.canvas_url(origin, course_id, citation["source_type"], citation["item_id"]),
-                "text": node_with_score.node.get_content()[:SNIPPET_CHARS],
+                "text": hit.text[:SNIPPET_CHARS],
             }
-            for n, (citation, node_with_score) in enumerate(zip(citations, nodes), start=1)
+            for n, (citation, hit) in enumerate(zip(citations, hits), start=1)
         ]
         seconds = time.perf_counter() - start
         logger.info("search course=%s query=%r results=%d seconds=%.2f", course_id, query, len(results), seconds)

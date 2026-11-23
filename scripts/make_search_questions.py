@@ -43,7 +43,7 @@ def _words(text: str) -> set[str]:
 def load_chunks(home: Path) -> dict[int, list[dict]]:
     import lancedb
 
-    import generation
+    import retrieval
 
     db = lancedb.connect(str(home / "index.lancedb"))
     courses = {}
@@ -54,7 +54,7 @@ def load_chunks(home: Path) -> dict[int, list[dict]]:
         rows = []
         for _, r in df.iterrows():
             md = dict(r["metadata"])
-            label = generation.citation_for(md, md.get("ref_doc_id") or md.get("doc_id") or "")["label"]
+            label = retrieval.citation_for(md, md.get("ref_doc_id") or md.get("doc_id") or "")["label"]
             rows.append({"id": r["id"], "text": r["text"], "label": label, "type": md.get("item_type") or "file"})
         courses[int(name.split("_")[1])] = rows
     return courses
