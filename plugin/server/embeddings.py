@@ -10,8 +10,8 @@ the sentence-transformers reference bit-for-bit (cosine similarity
 config for this model has empty query/document prompts, so there's
 nothing to replicate there either.
 
-Model files aren't in this repo (see .gitignore) — run
-scripts/convert_embedding_model.py once before using this.
+Model files aren't in this repo (see .gitignore): model_download.py fetches
+them on first use.
 """
 
 import os

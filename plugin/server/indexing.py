@@ -199,6 +199,11 @@ def load_index(db_path: Path, table_name: str) -> VectorStoreIndex:
     )
 
 
+def open_table(db_path: Path, table_name: str):
+    """A course's table, for search."""
+    return lancedb.connect(str(db_path)).open_table(table_name)
+
+
 def index_exists(db_path: Path, table_name: str) -> bool:
     if not db_path.exists():
         return False
@@ -206,7 +211,7 @@ def index_exists(db_path: Path, table_name: str) -> bool:
 
 
 def ensure_fts_index(table) -> None:
-    """BM25 full-text index for HybridRetriever (generation.py), which
+    """BM25 full-text index for HybridSearcher (retrieval.py), which
     exact names and keywords need. Built only when missing: LanceDB keeps it
     on the table. Same settings and name (text_idx) as the deprecated
     create_fts_index("text"), so indexes built before still match."""
