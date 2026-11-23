@@ -1,9 +1,13 @@
 #!/bin/sh
-# SessionStart hook: until a course is indexed on this machine, tell Claude
-# (and the student) that /canvas-study:setup is the way in. The note only says
+# SessionStart hook. Until a course is indexed on this machine, tell Claude
+# (and the student) that /canvas-study:setup is the way in. Once one is,
+# tell Claude which courses the student has. The not-set-up note says only
 # what was true at startup: setup can index a course later in the same session.
 HOME_DIR="${SM_HOME:-${CLAUDE_PLUGIN_DATA:-}}"
 if [ -n "$HOME_DIR" ] && [ -d "$HOME_DIR/index.lancedb" ]; then
+  # Set up: name the student's courses (server/session_note.py writes this
+  # whenever the course list can have changed).
+  [ -f "$HOME_DIR/session_start.json" ] && cat "$HOME_DIR/session_start.json"
   exit 0
 fi
 cat <<'JSON'
