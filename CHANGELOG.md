@@ -3,6 +3,12 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.2.1 (2026-11-22)
+
+- **Claude knows your courses:** at the start of each session Claude is told which courses you have indexed, so
+  a question like "In Software Testing, what's a mock?" is answered from your course material instead of from
+  general knowledge. On Sonnet and Haiku this took the plugin from rarely used to used every time in testing.
+
 ## 0.2.0 (2026-11-22)
 
 - **Grades:** `get_grades` returns your course total as Canvas computes it and how much each category is worth.
