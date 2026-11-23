@@ -590,3 +590,28 @@ def test_a_finished_sync_rewrites_the_session_note(tmp_path, monkeypatch):
         time.sleep(0.05)
 
     assert "Software Requirements" in (tmp_path / "session_start.json").read_text()
+
+
+def test_startup_backfills_missing_course_names_once(tmp_path):
+    _build_index(tmp_path)
+    calls = []
+
+    def courses():
+        calls.append(1)
+        return [{"id": COURSE, "name": "Software Requirements"}]
+
+    mcp_server.backfill_course_names(tmp_path, courses)
+    mcp_server.backfill_course_names(tmp_path, courses)  # names on disk now: Canvas isn't asked again
+
+    assert len(calls) == 1
+    assert "Software Requirements" in (tmp_path / "session_start.json").read_text()
+
+
+def test_backfill_without_canvas_or_index_does_nothing(tmp_path):
+    def offline():
+        raise httpx.ConnectError("offline")
+
+    mcp_server.backfill_course_names(tmp_path, offline)  # nothing indexed: Canvas never asked
+    _build_index(tmp_path)
+    mcp_server.backfill_course_names(tmp_path, offline)  # Canvas down: no crash, no note
+    assert not (tmp_path / "session_start.json").exists()

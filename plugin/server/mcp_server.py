@@ -194,6 +194,22 @@ def list_courses_result(home: Path, courses_for: Callable[[], list[dict]] = canv
     return {"courses": rows}
 
 
+def backfill_course_names(home: Path, courses_for: Callable[[], list[dict]] = canvas.list_courses) -> None:
+    """Installs indexed before the session note existed have no course names on
+    disk, and a student who only asks concept questions may never trigger
+    list_courses to fetch them: then the note never appears. At startup, if an
+    indexed course has no name, read the names from Canvas once. Never raises."""
+    ids = indexed_course_ids(home)
+    if not ids or all(session_note.has_name(home, cid) for cid in ids):
+        return
+    try:
+        session_note.remember_names(home, {c["id"]: c.get("name") for c in courses_for()})
+    except CANVAS_ERRORS as e:
+        logger.info("course names not backfilled: %s", e)
+        return
+    session_note.write_note(home, ids)
+
+
 def make_retriever(index):
     """The search retriever for one index. It returns MAX_K, not its default 5, so search's [:k] can reach MAX_K;
     fusion orders before it cuts, so the first 5 of 10 are the same top 5."""
@@ -468,6 +484,10 @@ def main() -> None:
     # httpx logs each request URL at INFO, and Canvas file downloads carry
     # signed tokens in theirs; Claude Code keeps the server's stderr in its logs.
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    # A daemon thread: a slow or unreachable Canvas never delays the server.
+    import threading
+
+    threading.Thread(target=backfill_course_names, args=(sm_home(),), daemon=True, name="backfill-names").start()
     build_server().run("stdio")
 
 
