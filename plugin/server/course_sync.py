@@ -427,9 +427,8 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
             {"id": f"quiz:{qid}", "updated_at": _quiz_version(q)} for qid, q in quizzes_by_id.items()
         ]
 
-        # Assignment instructions, so chat can answer "what does Task 2 ask
-        # for?" (Explain only ever read one assignment at a time) and "when is it
-        # due?". Ones with neither text nor a due date or points are left out;
+        # Assignment instructions, so search can answer "what does Task 2 ask
+        # for?" across assignments and "when is it due?". Ones with neither text nor a due date or points are left out;
         # an assignment whose description was cleared then reads as deleted,
         # which matches what the student can see.
         assignments_by_id = {
