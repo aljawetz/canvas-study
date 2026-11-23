@@ -146,10 +146,32 @@ def test_detail_without_a_rubric_says_so():
     assert out["due"] is None
 
 
-def test_detail_caps_a_long_description():
-    out = assignments.detail(_a(9, "Essay", None, UNSUBMITTED, description="<p>" + "word " * 5000 + "</p>"))
+def test_detail_keeps_a_long_lab_spec_whole():
+    # L3 - Observability was 18,666 characters and lost 79% of it to the old 4,000 cap.
+    spec = "".join(f"<p>Step {i}: run the thing and check it.</p>" for i in range(600))
+    out = assignments.detail(_a(9, "Lab", None, UNSUBMITTED, description=spec))
 
-    assert len(out["description"]) <= assignments.DESCRIPTION_CHARS + 1
+    assert "Step 599" in out["description"]
+    assert "description_cut" not in out
+
+
+def test_detail_says_when_it_cuts_and_how_to_read_the_rest():
+    words = " ".join(f"w{i}" for i in range(10_000))  # ~70k characters
+    raw = _a(9, "Essay", None, UNSUBMITTED, description=f"<p>{words}</p>")
+
+    first = assignments.detail(raw)
+    cut = first["description_cut"]
+    assert len(first["description"]) == assignments.DESCRIPTION_CHARS
+    assert cut["shown"] == [0, assignments.DESCRIPTION_CHARS]
+    assert f"description_offset={assignments.DESCRIPTION_CHARS}" in cut["note"]
+
+    pieces, offset = [first["description"]], cut["shown"][1]
+    while offset < cut["total_chars"]:
+        page = assignments.detail(raw, description_offset=offset)
+        pieces.append(page["description"])
+        offset = page["description_cut"]["shown"][1]
+    assert "".join(pieces) == assignments._text(raw["description"])
+    assert "description_offset=" not in page["description_cut"]["note"]
 
 
 def test_fallback_reads_due_lines_from_indexed_assignments():

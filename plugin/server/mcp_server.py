@@ -342,7 +342,8 @@ def canvas_zone():
 
 
 def list_assignments_result(home: Path, course_id: int, fetch, days: int, only_unsubmitted: bool,
-                            assignment_id: int | None, zone=assignments.machine_zone) -> dict:
+                            assignment_id: int | None, zone=assignments.machine_zone,
+                            description_offset: int = 0) -> dict:
     try:
         raw = fetch(course_id)
     except CANVAS_ERRORS as e:
@@ -352,7 +353,7 @@ def list_assignments_result(home: Path, course_id: int, fetch, days: int, only_u
         match = next((a for a in raw if a.get("id") == assignment_id), None)
         if match is None:
             return {"course_id": course_id, "note": f"No assignment {assignment_id} in this course on Canvas."}
-        return {"course_id": course_id, **assignments.detail(match, tz=zone())}
+        return {"course_id": course_id, **assignments.detail(match, tz=zone(), description_offset=description_offset)}
     return {"course_id": course_id, **assignments.upcoming(raw, days, only_unsubmitted, tz=zone())}
 
 
@@ -432,13 +433,14 @@ def build_server(home: Path | None = None, searcher: Searcher | None = None, cou
 
     @server.tool()
     def list_assignments(course_id: int, days: int = assignments.DEFAULT_DAYS, only_unsubmitted: bool = False,
-                         assignment_id: int | None = None) -> dict:
+                         assignment_id: int | None = None, description_offset: int = 0) -> dict:
         """Live from Canvas: every assignment due in the next `days` days and the last week, submitted or not,
         each with its submission status and score. Times come in the student's zone: show due_at_display as
         given. Pass only_unsubmitted when the student asks only for what is left to hand in. With
-        assignment_id: that one assignment's description, rubric, submission and score."""
+        assignment_id: that one assignment's description, rubric, submission and score. A very long description
+        comes with description_cut; pass its description_offset to read the rest."""
         return list_assignments_result(home, course_id, assignments_for, days, only_unsubmitted, assignment_id,
-                                       zone_for)
+                                       zone_for, description_offset)
 
     @server.tool()
     def get_grades(course_id: int) -> dict:

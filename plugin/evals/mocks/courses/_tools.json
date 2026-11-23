@@ -83,7 +83,7 @@
     },
     {
       "name": "list_assignments",
-      "description": "Live from Canvas: every assignment due in the next `days` days and the last week, submitted or not,\neach with its submission status and score. Times come in the student's zone: show due_at_display as\ngiven. Pass only_unsubmitted when the student asks only for what is left to hand in. With\nassignment_id: that one assignment's description, rubric, submission and score.",
+      "description": "Live from Canvas: every assignment due in the next `days` days and the last week, submitted or not,\neach with its submission status and score. Times come in the student's zone: show due_at_display as\ngiven. Pass only_unsubmitted when the student asks only for what is left to hand in. With\nassignment_id: that one assignment's description, rubric, submission and score. A very long description\ncomes with description_cut; pass its description_offset to read the rest.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -112,6 +112,11 @@
             ],
             "default": null,
             "title": "Assignment Id"
+          },
+          "description_offset": {
+            "default": 0,
+            "title": "Description Offset",
+            "type": "integer"
           }
         },
         "required": [
