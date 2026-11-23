@@ -3,6 +3,11 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.2.2 (2026-11-22)
+
+- **Fixed:** installs set up before 0.2.1 never got the course note if they only asked concept questions. The
+  server now fetches the course names once at startup when they're missing.
+
 ## 0.2.1 (2026-11-22)
 
 - **Claude knows your courses:** at the start of each session Claude is told which courses you have indexed, so

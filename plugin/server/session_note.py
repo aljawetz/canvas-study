@@ -29,6 +29,10 @@ def _names(home: Path) -> dict[str, str]:
         return {}
 
 
+def has_name(home: Path, course_id: int) -> bool:
+    return bool(_names(home).get(str(course_id)))
+
+
 def remember_names(home: Path, names: dict[int, str]) -> None:
     """Course names as Canvas last gave them, kept for the note."""
     merged = {**_names(home), **{str(cid): name for cid, name in names.items() if name}}
