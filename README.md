@@ -11,10 +11,17 @@ Unofficial. Not made by or affiliated with Instructure, the maker of Canvas.
 
 ## Install
 
-In Claude Code:
+In Claude Code (version 2.1.275 or later):
 
 ```text
 /plugin install canvas-study --marketplace aljawetz/canvas-study
+```
+
+On an older Claude Code, add the marketplace first, then install:
+
+```text
+/plugin marketplace add aljawetz/canvas-study
+/plugin install canvas-study@canvas-study
 ```
 
 Claude Code asks for your Canvas URL (default `https://canvas.cmu.edu`) and a Canvas access token. To make one:
@@ -26,8 +33,8 @@ Then run:
 /canvas-study:setup
 ```
 
-Setup downloads what it needs (about 400 MB the first time, a minute or two), lets you pick your courses and indexes
-them. Then ask away: "What's due this week?", "What does the syllabus say about late work?"
+Setup downloads what it needs the first time (about 320 MB, and about 800 MB on disk once installed: the local
+search database, the search model and its runtime, and Python), lets you pick your courses and indexes them. Then ask away: "What's due this week?", "What does the syllabus say about late work?"
 
 Works on macOS and Linux. Windows isn't supported yet.
 

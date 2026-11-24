@@ -7,7 +7,8 @@ Unofficial. Not made by or affiliated with Instructure, the maker of Canvas.
 
 ## Setup
 
-In Claude Code:
+In Claude Code (version 2.1.275 or later; on an older one, run `/plugin marketplace add aljawetz/canvas-study` and
+then `/plugin install canvas-study@canvas-study`):
 
 ```text
 /plugin install canvas-study --marketplace aljawetz/canvas-study
