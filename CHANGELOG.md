@@ -3,6 +3,13 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.3.2 (2026-11-24)
+
+- **Better answers to course-level questions:** "What is this course about?", "What will I learn?" and "What topics
+  does it cover?" now find the syllabus (83% of the time in the top results, up from 61%), including when the
+  syllabus is a PDF linked from Canvas. Courses indexed before this keep the old version until you re-sync them
+  from scratch.
+
 ## 0.3.1 (2026-11-24)
 
 - **Safer first install:** when your computer has no `uv`, the plugin now downloads it from uv's GitHub releases and
