@@ -81,6 +81,29 @@ def _searcher(home: Path, table):
     return mcp_server.Searcher(home, make_searcher=make), calls
 
 
+_WRITER = """
+import sys
+import indexing
+chunk = indexing.Chunk("Weekly quizzes are open book.", {"source": "quiz policy", "item_type": "page", "page": None,
+                       "slide": None}, "page:quiz-policy")
+unit = [1.0] + [0.0] * (indexing.EMBEDDING_DIM - 1)
+indexing.add_nodes([chunk], sys.argv[1], sys.argv[2], embed=lambda text: unit)
+"""
+
+
+def test_a_search_sees_a_sync_written_by_another_server_process(tmp_path):
+    import subprocess
+    import sys
+
+    searcher, _ = _searcher(tmp_path, _build_index(tmp_path))
+    assert searcher.search(COURSE, "quizzes open book")["results"] == []
+
+    subprocess.run([sys.executable, "-c", _WRITER, str(tmp_path / "index.lancedb"), f"course_{COURSE}"], check=True,
+                   env={**os.environ, "PYTHONPATH": str(Path(indexing.__file__).parent)})
+
+    assert [r["source"] for r in searcher.search(COURSE, "quizzes open book")["results"]] == ["quiz policy"]
+
+
 def _call(server, name: str, arguments: dict | None = None) -> dict:
     async def go():
         async with Client(server) as client:

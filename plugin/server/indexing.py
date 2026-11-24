@@ -12,6 +12,8 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
+from datetime import timedelta
+
 import lancedb
 import pyarrow as pa
 from lancedb.expr import col, lit
@@ -243,8 +245,11 @@ def _default_embed(text: str) -> list[float]:
 
 
 def open_table(db_path: Path, table_name: str):
-    """A course's table, for search."""
-    return lancedb.connect(str(db_path)).open_table(table_name)
+    """A course's table, for search. A LanceDB handle otherwise keeps reading
+    the version it was opened at, so a sync by another Claude session (another
+    server process) went unseen until restart. Checking for a newer version on
+    every read costs ~1.5 ms on a ~35 ms search of a 3.5k-chunk course."""
+    return lancedb.connect(str(db_path), read_consistency_interval=timedelta(0)).open_table(table_name)
 
 
 def index_exists(db_path: Path, table_name: str) -> bool:
