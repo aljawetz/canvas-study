@@ -3,6 +3,15 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.3.1 (2026-11-24)
+
+- **Safer first install:** when your computer has no `uv`, the plugin now downloads it from uv's GitHub releases and
+  checks its SHA-256 before using it, instead of running an install script.
+- **Clearer messages:** without a token, before any sync, it no longer claims due dates "from the last sync"; a
+  mistyped token is told it "doesn't work" rather than "no longer works".
+- **Docs:** the install command needs Claude Code 2.1.275 or later (older versions: add the marketplace first), and
+  setup takes about 320 MB of download and 800 MB of disk.
+
 ## 0.3.0 (2026-11-24)
 
 - **Smaller, simpler install:** the search engine no longer runs through llama-index. The server installs 66
