@@ -18,10 +18,6 @@ from pathlib import Path
 import anyio
 import numpy as np
 import pytest
-from llama_index.core import StorageContext, VectorStoreIndex
-from llama_index.core.embeddings import BaseEmbedding
-from llama_index.core.schema import TextNode
-from llama_index.vector_stores.lancedb import LanceDBVectorStore
 from mcp import Client, StdioServerParameters
 
 import indexing
@@ -42,12 +38,12 @@ def no_canvas_token(monkeypatch):
 COURSE = 55016
 
 
-class _HashEmbedding(BaseEmbedding):
+class _HashEmbedding:
     """Bag of words hashed into the real width: offline and deterministic.
-    Scores stay under the 0.5 cutoff, so the keyword (BM25) hit is what comes
-    back, through the real HybridSearcher."""
+    Scores stay under the similarity cutoff, so the keyword (BM25) hit is what
+    comes back, through the real HybridSearcher."""
 
-    def _embed(self, text: str) -> list[float]:
+    def embed(self, text: str) -> list[float]:
         vec = np.zeros(EMBEDDING_DIM, dtype=np.float64)
         for token in re.findall(r"[a-z0-9]+", text.lower()) or ["empty"]:
             slot = 0
@@ -55,18 +51,6 @@ class _HashEmbedding(BaseEmbedding):
                 slot = (slot * 33 + ord(char)) % EMBEDDING_DIM
             vec[slot] += 1.0
         return (vec / np.linalg.norm(vec)).tolist()
-
-    def _get_query_embedding(self, query):
-        return self._embed(query)
-
-    def _get_text_embedding(self, text):
-        return self._embed(text)
-
-    async def _aget_query_embedding(self, query):
-        return self._embed(query)
-
-    async def _aget_text_embedding(self, text):
-        return self._embed(text)
 
 
 _PAGES = [
@@ -76,28 +60,23 @@ _PAGES = [
 ]
 
 
-def _build_index(home: Path, course_id: int = COURSE, pages=_PAGES) -> VectorStoreIndex:
-    nodes = [
-        TextNode(text=text, metadata={"source": source, "item_type": "file", "page": page, "slide": None, "timestamp": None})
-        for text, source, page in pages
-    ]
-    store = LanceDBVectorStore(uri=str(home / "index.lancedb"), table_name=f"course_{course_id}")
-    index = VectorStoreIndex(
-        nodes,
-        storage_context=StorageContext.from_defaults(vector_store=store),
-        embed_model=_HashEmbedding(),
-        transformations=[],
-    )
-    indexing.ensure_fts_index(store.table)
-    return index
+def _add(home: Path, chunks, course_id: int = COURSE):
+    indexing.add_nodes(chunks, home / "index.lancedb", f"course_{course_id}", embed=_HashEmbedding().embed)
+    return indexing.open_table(home / "index.lancedb", f"course_{course_id}")
 
 
-def _searcher(home: Path, index: VectorStoreIndex):
+def _build_index(home: Path, course_id: int = COURSE, pages=_PAGES):
+    chunks = [indexing.Chunk(text, {"source": source, "item_type": "file", "page": page, "slide": None}, f"file:{i}")
+              for i, (text, source, page) in enumerate(pages)]
+    return _add(home, chunks, course_id)
+
+
+def _searcher(home: Path, table):
     calls = []
 
     def make(course_id):
         calls.append(course_id)
-        return mcp_server.make_searcher(index.vector_store.table, _HashEmbedding().get_query_embedding)
+        return mcp_server.make_searcher(table, _HashEmbedding().embed)
 
     return mcp_server.Searcher(home, make_searcher=make), calls
 
@@ -373,14 +352,9 @@ def test_list_assignments_with_an_unknown_id_says_so(tmp_path):
 
 
 def _index_with_an_assignment(home):
-    store = LanceDBVectorStore(uri=str(home / "index.lancedb"), table_name=f"course_{COURSE}")
-    node = TextNode(
-        text="Due date and points\nDue Fri, Nov 20, 2026 at 11:59 PM EST. Worth 50 points.",
-        metadata={"source": "Lab 3", "item_type": "assignment", "page": None, "slide": None, "timestamp": None},
-    )
-    node.relationships = {}
-    VectorStoreIndex([node], storage_context=StorageContext.from_defaults(vector_store=store),
-                     embed_model=_HashEmbedding(), transformations=[])
+    _add(home, [indexing.Chunk("Due date and points\nDue Fri, Nov 20, 2026 at 11:59 PM EST. Worth 50 points.",
+                               {"source": "Lab 3", "item_type": "assignment", "page": None, "slide": None},
+                               "assignment:301")])
 
 
 @pytest.mark.parametrize(
@@ -440,14 +414,10 @@ def test_zone_falls_back_to_the_machine_when_canvas_fails(monkeypatch):
 
 def test_search_results_link_to_their_canvas_page(tmp_path, monkeypatch):
     monkeypatch.setenv("SM_CANVAS_URL", "https://canvas.example.edu")
-    store = LanceDBVectorStore(uri=str(tmp_path / "index.lancedb"), table_name=f"course_{COURSE}")
-    node = TextNode(text="Late work loses ten percent per day.",
-                    metadata={"source": "syllabus", "item_type": "syllabus", "page": None, "slide": None, "timestamp": None})
-    node = indexing._with_ref_doc(node, f"syllabus:{COURSE}")
-    index = VectorStoreIndex([node], storage_context=StorageContext.from_defaults(vector_store=store),
-                             embed_model=_HashEmbedding(), transformations=[])
-    indexing.ensure_fts_index(store.table)
-    searcher, _ = _searcher(tmp_path, index)
+    table = _add(tmp_path, [indexing.Chunk("Late work loses ten percent per day.",
+                                          {"source": "syllabus", "item_type": "syllabus", "page": None, "slide": None},
+                                          f"syllabus:{COURSE}")])
+    searcher, _ = _searcher(tmp_path, table)
 
     out = searcher.search(COURSE, "late work")
 

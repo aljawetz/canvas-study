@@ -8,8 +8,10 @@ from pathlib import Path
 
 import pytest
 
-import ingestion
+import embeddings
 import indexing
+import ingestion
+import retrieval
 
 FIXTURES = Path(__file__).parent / "fixtures" / "ingestion"
 
@@ -38,8 +40,11 @@ def retriever():
     )
 
     with tempfile.TemporaryDirectory() as tmp:
-        index = indexing.build_index(nodes, Path(tmp), "smoke_test")
-        yield index.as_retriever(similarity_top_k=3)
+        indexing.add_nodes(nodes, Path(tmp), "smoke_test")
+        # Vector search only, no cutoff, top 3: what this smoke test has always measured.
+        searcher = retrieval.HybridSearcher(indexing.open_table(Path(tmp), "smoke_test"),
+                                            embeddings.OnnxBgeEmbedding().embed, cutoff=-1.0)
+        yield lambda query: searcher.vector(query)[:3]
 
 
 def _hit_rank(results, source, expected_pages):
@@ -54,21 +59,21 @@ def _hit_rank(results, source, expected_pages):
 # footer), so this passes only if OCR-recovered text is good enough to embed
 # and rank first.
 def test_ocr_dependent_query_ranks_first(retriever):
-    results = retriever.retrieve("What citation style should I choose?")
+    results = retriever("What citation style should I choose?")
     assert _hit_rank(results, "zotero", {8}) == 1
 
 
 # Pages 3 and 4 are near-duplicates (both about installation): either is right.
 def test_install_query_hits_top_3(retriever):
-    results = retriever.retrieve("How do I install Zotero?")
+    results = retriever("How do I install Zotero?")
     assert _hit_rank(results, "zotero", {3, 4}) is not None
 
 
 def test_collection_query_hits_top_3(retriever):
-    results = retriever.retrieve("How do I create a collection in Zotero?")
+    results = retriever("How do I create a collection in Zotero?")
     assert _hit_rank(results, "zotero", {5}) is not None
 
 
 def test_cross_file_query_hits_top_3(retriever):
-    results = retriever.retrieve("What is a vector database?")
+    results = retriever("What is a vector database?")
     assert _hit_rank(results, "ai_research", {9}) is not None
