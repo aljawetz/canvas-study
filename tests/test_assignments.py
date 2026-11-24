@@ -183,6 +183,19 @@ def test_rows_count_only_the_teachers_comments():
     assert "teacher_comments" not in rows[1]
 
 
+def test_upcoming_points_to_feedback_outside_its_window():
+    raw = [_commented(1, "Lab 1", NOW - timedelta(days=60), [_comment(PROF, "Old note", NOW - timedelta(days=50))]),
+           _commented(2, "Lab 2", NOW - timedelta(days=1), [_comment(PROF, "Shown", NOW)]),
+           _commented(3, "Lab 3", NOW - timedelta(days=40), [_comment(ME, "my own reply", NOW)])]
+
+    out = assignments.upcoming(raw, days=7, now=NOW)
+
+    assert [a["name"] for a in out["assignments"]] == ["Lab 2"]
+    assert out["feedback_elsewhere"].startswith("1 other assignment not listed")
+    assert "with_feedback=true" in out["feedback_elsewhere"]
+    assert "feedback_elsewhere" not in assignments.upcoming(raw[1:], days=7, now=NOW)
+
+
 def test_with_feedback_lists_commented_work_of_any_date_latest_comment_first():
     raw = [
         _commented(1, "Lab 1", NOW - timedelta(days=90), [_comment(PROF, "Old note", NOW - timedelta(days=80))]),

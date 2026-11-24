@@ -222,14 +222,22 @@ def upcoming(raw: list[dict], days: int = DEFAULT_DAYS, only_unsubmitted: bool =
             continue
         rows.append((due, row))
     rows.sort(key=lambda pair: pair[0])
+    shown = [r for _, r in rows[:MAX_ROWS]]
     out = {
         "as_of": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "timezone": zone_name(tz),
         "days": days,
-        "assignments": [r for _, r in rows[:MAX_ROWS]],
+        "assignments": shown,
     }
     if len(rows) > MAX_ROWS:
         out["more"] = len(rows) - MAX_ROWS
+    # Feedback usually lands on work graded weeks ago, outside this window,
+    # and in testing Sonnet widened `days` instead of finding with_feedback.
+    shown_ids = {r["assignment_id"] for r in shown}
+    elsewhere = sum(1 for a in raw if a.get("id") not in shown_ids and teacher_comment_count(a))
+    if elsewhere:
+        out["feedback_elsewhere"] = (f"{elsewhere} other assignment{'s' if elsewhere != 1 else ''} not listed here "
+                                     "have teacher comments: call again with with_feedback=true to read them.")
     return out
 
 
