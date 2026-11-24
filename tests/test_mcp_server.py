@@ -363,7 +363,7 @@ def _index_with_an_assignment(home):
         (canvas.CanvasError("no Canvas token stored"), "No Canvas token is set up"),
         (httpx.ConnectError("offline"), "Canvas could not be reached"),
         (httpx.HTTPStatusError("401", request=httpx.Request("GET", "https://c"), response=httpx.Response(401)),
-         "Your Canvas token no longer works"),
+         "Your Canvas token doesn't work"),
     ],
 )
 def test_list_assignments_falls_back_to_the_index(tmp_path, error, reason):
@@ -377,6 +377,18 @@ def test_list_assignments_falls_back_to_the_index(tmp_path, error, reason):
     assert out["stale"] is True
     assert out["note"].startswith(reason)
     assert out["assignments"] == [{"name": "Lab 3", "schedule": "Due Fri, Nov 20, 2026 at 11:59 PM EST. Worth 50 points."}]
+
+
+def test_list_assignments_without_canvas_or_a_sync_says_nothing_was_synced(tmp_path):
+    def fail(cid):
+        raise canvas.CanvasError("no Canvas token stored")
+
+    out = _call(_assignments_server(tmp_path, fail), "list_assignments", {"course_id": COURSE})
+
+    assert out["assignments"] == []
+    assert out["note"].startswith("No Canvas token is set up")
+    assert "hasn't been synced on this machine" in out["note"]
+    assert "last sync" not in out["note"]
 
 
 def test_list_assignments_shows_times_in_the_students_zone(tmp_path):
