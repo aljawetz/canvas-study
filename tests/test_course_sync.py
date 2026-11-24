@@ -875,3 +875,31 @@ def test_unpublished_quizzes_are_not_indexed(tmp_path, stub_extraction, monkeypa
     run(1, tmp_path)
 
     assert _manifest_ids(tmp_path) == {"quiz:4410"}
+
+
+def test_syllabus_chunks_are_headed_course_syllabus_and_still_cited_as_syllabus(tmp_path, stub_extraction, monkeypatch):
+    # Course-level questions ("what will I learn in this course?") say "course"; see indexing.SYLLABUS_TITLE.
+    monkeypatch.setattr(course_sync.canvas, "get_course_structure", lambda course_id: [])
+    monkeypatch.setattr(course_sync.canvas, "list_pages", lambda course_id: [])
+    monkeypatch.setattr(course_sync.canvas, "get_syllabus",
+                        lambda course_id: "<h2>List of Topics</h2><p>Requirements elicitation and prototyping.</p>")
+    added = []
+    monkeypatch.setattr(course_sync.indexing, "add_nodes", lambda nodes, db_path, table_name: added.extend(nodes))
+
+    run(1, tmp_path)
+
+    [chunk] = added
+    assert chunk.text.startswith("Course syllabus › List of Topics\n")
+    assert chunk.metadata["source"] == "Syllabus" and chunk.metadata["item_type"] == "syllabus"
+
+
+def test_a_file_named_like_a_syllabus_is_marked_as_the_course_syllabus(tmp_path, stub_canvas, stub_extraction, monkeypatch):
+    # Many Canvas syllabus pages only link a PDF: that PDF is the syllabus.
+    added = []
+    monkeypatch.setattr(course_sync.indexing, "add_nodes", lambda nodes, db_path, table_name: added.extend(nodes))
+
+    run(1, tmp_path)
+
+    files = [c for c in added if c.metadata["item_type"] == "file"]
+    assert files and all(c.text.startswith("Course syllabus: syllabus.pdf\n") for c in files)
+    assert all(c.metadata["source"] == "syllabus.pdf" for c in files)  # its citation is unchanged

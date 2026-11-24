@@ -78,6 +78,7 @@ def _sync_file(conn, db_path, table_name, file_meta, is_changed):
     finally:
         tmp_path.unlink()
 
+    nodes = indexing.mark_syllabus_file(nodes, display_name)
     if nodes:
         indexing.add_nodes(nodes, db_path, table_name)
     sync.mark_synced(conn, prefixed_id, "file", display_name, updated_at, sync.content_hash(full_text))
@@ -159,7 +160,8 @@ def _sync_syllabus(conn, db_path, table_name, course_id, syllabus_html, version,
     text = ingestion.sections_text(sections)
     # Own item_type so citation_links.py can open Canvas's syllabus URL
     # (/assignments/syllabus), which isn't under /pages/.
-    nodes = indexing.sections_to_nodes(sections, "Syllabus", prefixed_id, item_type="syllabus")
+    nodes = indexing.sections_to_nodes(sections, "Syllabus", prefixed_id, item_type="syllabus",
+                                       title=indexing.SYLLABUS_TITLE)
     if nodes:
         indexing.add_nodes(nodes, db_path, table_name)
     sync.mark_synced(conn, prefixed_id, "syllabus", "Syllabus", version, sync.content_hash(text))

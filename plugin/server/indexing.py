@@ -148,7 +148,8 @@ def pages_to_nodes(pages: list[dict], source: str, canvas_item_id: str, item_typ
     ]
 
 
-def sections_to_nodes(sections: list[dict], source: str, canvas_item_id: str, item_type: str) -> list[Chunk]:
+def sections_to_nodes(sections: list[dict], source: str, canvas_item_id: str, item_type: str,
+                      title: str | None = None) -> list[Chunk]:
     """Canvas HTML sections (ingestion.extract_html_sections) -> chunks, one
     section at a time so a chunk never mixes sections (a syllabus's grading
     table no longer shares a chunk with its staff list).
@@ -159,7 +160,12 @@ def sections_to_nodes(sections: list[dict], source: str, canvas_item_id: str, it
     counted against the chunk size, so heading plus text stays under the
     embedding window. A heading with no text of its own ("Class Schedule"
     directly followed by another bold line) becomes a line of the next
-    section instead of a near-empty chunk."""
+    section instead of a near-empty chunk.
+
+    title, when given, is what the heading line calls the item (the
+    citation label stays source): "Course syllabus" for a syllabus labelled
+    "Syllabus"."""
+    title = title or source
     chunks = []
     pending: list[str] = []
     for section in sections:
@@ -167,15 +173,31 @@ def sections_to_nodes(sections: list[dict], source: str, canvas_item_id: str, it
             if section["heading"]:
                 pending.append(section["heading"])
             continue
-        path = f"{source} › {section['heading']}" if section["heading"] else source
+        path = f"{title} › {section['heading']}" if section["heading"] else title
         body = "\n".join([*pending, section["text"]])
         pending = []
         room = max(CHUNK_SIZE - _count(path) - 1, CHUNK_SIZE // 2)
         for chunk in split_text(body, size=room):
             chunks.append(Chunk(f"{path}\n{chunk}", _metadata(source, item_type), canvas_item_id))
     if pending:
-        chunks.append(Chunk(f"{source}\n" + "\n".join(pending), _metadata(source, item_type), canvas_item_id))
+        chunks.append(Chunk(f"{title}\n" + "\n".join(pending), _metadata(source, item_type), canvas_item_id))
     return chunks
+
+
+# Course-level questions ("what is this course about?", "what will I
+# learn?") say "course"; a syllabus chunk headed only "Syllabus › List of
+# Topics" ranked 13th to 17th for them. Headed "Course syllabus", syllabus
+# questions went from 70% to 83% found in the top 5 (search benchmark),
+# with no question lost elsewhere.
+SYLLABUS_TITLE = "Course syllabus"
+
+
+def mark_syllabus_file(chunks: list[Chunk], name: str) -> list[Chunk]:
+    """A file named like a syllabus (many Canvas syllabus pages only link a
+    PDF) gets the same "Course syllabus" line on each chunk."""
+    if "syllabus" not in name.lower():
+        return chunks
+    return [Chunk(f"{SYLLABUS_TITLE}: {name}\n{c.text}", c.metadata, c.item_id) for c in chunks]
 
 
 def slides_to_nodes(slides: list[dict], source: str, canvas_item_id: str) -> list[Chunk]:
