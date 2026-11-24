@@ -1,8 +1,9 @@
 #!/bin/sh
 # Starts the Canvas Study MCP server (plugin/server, run by uvx). A student
-# installs nothing by hand: when this machine has no uv, the official installer
-# (pinned) puts it in the plugin's data folder, without touching PATH or shell
-# profiles. Everything it prints goes to stderr: stdout is the MCP channel.
+# installs nothing by hand: when this machine has no uv, the pinned uv release
+# is downloaded from GitHub, checked against its SHA-256 below and unpacked
+# into the plugin's data folder, without touching PATH or shell profiles.
+# Everything it prints goes to stderr: stdout is the MCP channel.
 #
 #   server                   the MCP server (what .mcp.json runs)
 #   server --download-model  get uv, the server's packages and the search model
@@ -24,10 +25,47 @@ find_uvx() {
   return 1
 }
 
-if ! UVX="$(find_uvx)"; then
+# SHA-256 of each uv release archive, from the release's own .sha256 files
+# (github.com/astral-sh/uv/releases/tag/0.9.28). Change with UV_VERSION.
+uv_target_and_sha() {
+  case "$(uname -s)-$(uname -m)" in
+    Darwin-arm64) echo "aarch64-apple-darwin 12163fe09eb292d3ad1ea0f132a84485c902e2ff360d57562bf676e6615fcba0" ;;
+    Darwin-x86_64) echo "x86_64-apple-darwin 3a8030881d13b824e5168f5e4d060e715e40753249766bda3d52d6771d93b169" ;;
+    Linux-x86_64) echo "x86_64-unknown-linux-gnu 66ad1822dd9cf96694b95c24f25bc05cff417a65351464da01682a91796d1f2b" ;;
+    Linux-aarch64 | Linux-arm64) echo "aarch64-unknown-linux-gnu 382c342735ff29f8ba4574d88e39bca798bcbac50bff6742710ca9cd8143e7d2" ;;
+    *) return 1 ;;
+  esac
+}
+
+sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; else shasum -a 256 "$1" | cut -d' ' -f1; fi
+}
+
+install_uv() {
+  if ! target_sha="$(uv_target_and_sha)"; then
+    echo "canvas-study: no uv build for $(uname -s) $(uname -m); install uv yourself (https://docs.astral.sh/uv/) and retry" >&2
+    exit 1
+  fi
+  target="${target_sha% *}"
+  expected="${target_sha#* }"
   echo "canvas-study: installing uv $UV_VERSION into $UV_DIR" >&2
+  tmp="$(mktemp -d)"
+  trap 'rm -rf "$tmp"' EXIT
+  curl -LsSf "https://github.com/astral-sh/uv/releases/download/$UV_VERSION/uv-$target.tar.gz" -o "$tmp/uv.tar.gz"
+  actual="$(sha256_of "$tmp/uv.tar.gz")"
+  if [ "$actual" != "$expected" ]; then
+    echo "canvas-study: the uv download failed its checksum (expected $expected, got $actual); not installing it" >&2
+    exit 1
+  fi
+  tar -xzf "$tmp/uv.tar.gz" -C "$tmp"
   mkdir -p "$UV_DIR"
-  curl -LsSf "https://astral.sh/uv/$UV_VERSION/install.sh" | env UV_UNMANAGED_INSTALL="$UV_DIR" sh >&2
+  mv "$tmp/uv-$target/uv" "$tmp/uv-$target/uvx" "$UV_DIR/"
+  rm -rf "$tmp"
+  trap - EXIT
+}
+
+if ! UVX="$(find_uvx)"; then
+  install_uv
   UVX="$UV_DIR/uvx"
 fi
 
