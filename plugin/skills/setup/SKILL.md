@@ -30,7 +30,7 @@ server could not start before step 1 finished. Ask the student to run `/mcp reco
 
 ## 3. Check Canvas
 
-Call `list_courses`. If its note says there is no Canvas token, or that the token no longer works, walk the
+Call `list_courses`. If its note says there is no Canvas token, or that the token doesn't work, walk the
 student through it:
 
 1. In Canvas: Account > Settings > Approved Integrations > **+ New Access Token**. Purpose: "Canvas Study".

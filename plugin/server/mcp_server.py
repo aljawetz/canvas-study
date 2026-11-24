@@ -326,7 +326,7 @@ def _index_rows(home: Path, course_id: int) -> list[dict]:
 def _canvas_failure(error: Exception) -> str:
     """Why Canvas gave nothing, in words the student can act on."""
     if isinstance(error, httpx.HTTPStatusError) and error.response.status_code == 401:
-        return ("Your Canvas token no longer works (make a new one in Canvas and paste it in /plugin > Installed > "
+        return ("Your Canvas token doesn't work (make a new one in Canvas and paste it in /plugin > Installed > "
                 "canvas-study > Configure options, then run /reload-plugins)")
     if isinstance(error, canvas.CanvasError):
         return "No Canvas token is set up (run /canvas-study:setup)"

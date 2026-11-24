@@ -254,7 +254,16 @@ def detail(assignment: dict, now: datetime | None = None, tz: tzinfo | None = No
 def from_index_rows(rows: list[dict], reason: str) -> dict:
     """The fallback when Canvas can't be reached: the "Due ... Worth N
     points" line course_sync.schedule_line put in each indexed assignment.
-    No status, and as old as the last sync."""
+    No status, and as old as the last sync. With no rows the course was
+    never synced here, so there is nothing to fall back on: say that rather
+    than point at a "last sync" that never happened."""
+    if not rows:
+        return {
+            "stale": True,
+            "note": f"{reason}, and this course hasn't been synced on this machine yet, so there are no due dates to "
+                    "show. Once Canvas works, they are read live.",
+            "assignments": [],
+        }
     seen: dict[str, dict] = {}
     for row in rows:
         metadata = row.get("metadata") or {}
