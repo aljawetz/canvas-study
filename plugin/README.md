@@ -24,7 +24,8 @@ Works on macOS and Linux.
 
 - A local MCP server (`scripts/server`, Python source in `server/`), started by Claude Code.
 - `uv`, to install and run that server. If `uv` isn't installed, the plugin downloads a pinned version (0.9.28)
-  from `astral.sh` into its own data folder. It doesn't touch your `PATH` or shell profile.
+  from uv's GitHub releases, checks it against a SHA-256 written into `scripts/server`, and puts it in its own data
+  folder. It doesn't touch your `PATH` or shell profile.
 - A `SessionStart` hook (`scripts/session-start`) that points you to setup until a course is indexed, and after
   that tells Claude the names of your indexed courses (read from a file in the data folder; it calls nothing).
 - Tesseract, only if you already have it installed, to read text in image-only PDF pages. Without it those pages
@@ -35,6 +36,8 @@ Works on macOS and Linux.
 - **Your Canvas** (the URL you set): reads your courses, modules, pages, files, assignments, quizzes (settings and
   instructions, never the questions), announcements, discussions and grades with your token. It never writes to Canvas.
 - **PyPI**, once, to download the server's Python packages at the exact versions in `server/constraints.txt`.
+- **GitHub**, once and only if needed: `uv` itself when it isn't installed (checksum-verified), and the Python 3.13
+  that `uv` runs the server on, from uv's own Python builds.
 - **Hugging Face**, once, to download the search model
   ([BAAI/bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5), pinned to one revision).
 

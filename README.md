@@ -39,7 +39,7 @@ Everything stays on your computer:
 - Your course index lives in the plugin's data folder (`~/.claude/plugins/data/canvas-study-canvas-study/`).
 - The plugin itself calls no AI service and sends no telemetry. It talks only to your Canvas (read-only), plus
   one-time downloads of its Python packages (PyPI, at pinned versions), its search model (Hugging Face) and, if your
-  computer has no `uv`, the `uv` installer (astral.sh). The answers come from Claude Code, under your own Claude
+  computer has no `uv`, `uv` itself and the Python it runs on (GitHub releases, checksum-verified). The answers come from Claude Code, under your own Claude
   account.
 
 The full list of what it runs, sends and fetches is in [plugin/README.md](plugin/README.md).

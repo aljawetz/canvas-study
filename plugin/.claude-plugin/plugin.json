@@ -22,7 +22,8 @@
       "pypi.org",
       "files.pythonhosted.org",
       "huggingface.co",
-      "astral.sh"
+      "github.com",
+      "release-assets.githubusercontent.com"
     ]
   },
   "userConfig": {

@@ -27,3 +27,7 @@ jobs:
       - run: uv run pytest -q
       - name: The plugin's server builds and starts
         run: plugin/scripts/server --version
+      - name: Without uv, the plugin downloads and verifies it, then starts
+        # Empty home and a PATH without the uv that setup-uv installed: the
+        # launcher must fetch uv itself, check its SHA-256 and run the server.
+        run: env -i HOME="$(mktemp -d)" PATH=/usr/bin:/bin LANG=C.UTF-8 plugin/scripts/server --version
