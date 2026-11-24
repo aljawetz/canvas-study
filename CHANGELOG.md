@@ -3,6 +3,15 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.3.0 (2026-11-24)
+
+- **Smaller, simpler install:** the search engine no longer runs through llama-index. The server installs 66
+  packages instead of 111, and 496 MB instead of 818 MB.
+- **Same search quality:** measured on a real student's courses, the right page is in the top 5 results as often
+  as before (84.9% on 225 short questions).
+- **Breaking:** the course index format changed. After updating, run `/canvas-study:setup` and re-sync your
+  courses; the old index can't be read.
+
 ## 0.2.2 (2026-11-22)
 
 - **Fixed:** installs set up before 0.2.1 never got the course note if they only asked concept questions. The
