@@ -784,11 +784,13 @@ def test_discussion_attachments_are_indexed_as_files(tmp_path, stub_extraction, 
 def test_outline_lists_linked_files_under_their_page_and_the_rest_in_their_own_groups(tmp_path, stub_extraction, files_by_id, monkeypatch):
     _module_page_with_body(monkeypatch, _link(333))
     monkeypatch.setattr(course_sync.canvas, "list_course_files", lambda course_id: [dict(SLIDES)])
-    monkeypatch.setattr(course_sync.canvas, "list_announcements", lambda course_id: [{"id": 7, "title": "Room", "message": "<p>Room 101</p>"}])
+    monkeypatch.setattr(course_sync.canvas, "list_announcements", lambda course_id: [
+        {"id": 7, "title": "Room", "message": "<p>Room 101</p>", "html_url": "https://c/courses/1/discussion_topics/7"}])
     monkeypatch.setattr(course_sync.canvas, "list_discussions", lambda course_id: [{"id": 5, "title": "Updates", "message": "<p>x</p>"}])
     run(1, tmp_path)
     conn = course_sync.sync.open_manifest(tmp_path / "courses" / "1" / "manifest.db")
-    rows = [(r["module"], r["section"], r["title"], r["item_type"]) for r in course_sync.course_items.load_outline(conn)]
+    outline = course_sync.course_items.load_outline(conn)
+    rows = [(r["module"], r["section"], r["title"], r["item_type"]) for r in outline]
     conn.close()
     assert rows == [
         ("Week 1", "", "Task 1 Resources", "page"),
@@ -797,6 +799,12 @@ def test_outline_lists_linked_files_under_their_page_and_the_rest_in_their_own_g
         ("Announcements", "", "Room", "announcement"),
         ("Discussions", "", "Updates", "discussion"),
     ]
+    origin = course_sync.canvas.origin()
+    urls = {r["title"]: r["url"] for r in outline}
+    assert urls["Koskela Ch1.pdf"] == f"{origin}/courses/1/files/333"
+    assert urls["Lecture 2.pptx"] == f"{origin}/courses/1/files/{SLIDES['id']}"
+    assert urls["Room"] == "https://c/courses/1/discussion_topics/7"
+    assert urls["Updates"] == ""  # no html_url from Canvas: listed without a link
 
 
 QUIZ = {
