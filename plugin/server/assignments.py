@@ -1,8 +1,9 @@
 """Assignments for the plugin's list_assignments tool.
 
-Deadlines, submission status, scores and rubrics are read live from Canvas
-(canvas.list_assignments, one call with include[]=submission; Canvas puts
-the rubric on every assignment that has one). The index is a snapshot and
+Deadlines, submission status, scores, rubrics and teacher comments are read
+live from Canvas (canvas.list_assignments, one call with include[]=submission
+and submission_comments; Canvas puts the rubric on every assignment that has
+one). The index is a snapshot and
 has none of the status, so it is only a fallback when Canvas can't be
 reached, and says so.
 
@@ -125,9 +126,41 @@ def _status(assignment: dict, now: datetime) -> str:
     return "past due, not submitted" if due and due < now else "not submitted"
 
 
+def _comments(assignment: dict) -> list[dict]:
+    submission = assignment.get("submission") or {}
+    return [c for c in submission.get("submission_comments") or [] if (c.get("comment") or "").strip()]
+
+
+def _from_teacher(assignment: dict, comment: dict) -> bool:
+    """A comment someone other than the student wrote. The student's own
+    replies stay in the thread but don't count as feedback."""
+    return comment.get("author_id") != (assignment.get("submission") or {}).get("user_id")
+
+
+def teacher_comment_count(assignment: dict) -> int:
+    return sum(_from_teacher(assignment, c) for c in _comments(assignment))
+
+
+def feedback(assignment: dict, tz: tzinfo, now: datetime) -> list[dict]:
+    """The comment thread on the student's submission, oldest first: who wrote
+    each comment (the student's own show as "you"), when, and the text in
+    full. Canvas sends comments as plain text."""
+    out = []
+    for c in _comments(assignment):
+        at = _parse(c.get("created_at"))
+        out.append({
+            "from": (c.get("author_name") or "teacher") if _from_teacher(assignment, c) else "you",
+            **({"at": when(at, tz, now)["due_at_display"]} if at else {}),
+            **({"attempt": c["attempt"]} if c.get("attempt") else {}),
+            "comment": c["comment"].strip(),
+        })
+    return out
+
+
 def _row(assignment: dict, now: datetime, tz: tzinfo) -> dict:
     submission = assignment.get("submission") or {}
     due = _due(assignment)
+    comments = teacher_comment_count(assignment)
     return {
         "assignment_id": assignment["id"],
         "name": assignment.get("name") or f"Assignment {assignment['id']}",
@@ -137,8 +170,35 @@ def _row(assignment: dict, now: datetime, tz: tzinfo) -> dict:
         "score": submission.get("score"),
         "late": bool(submission.get("late")),
         "missing": bool(submission.get("missing")),
+        **({"teacher_comments": comments} if comments else {}),
         "url": assignment.get("html_url"),
     }
+
+
+def with_feedback(raw: list[dict], now: datetime | None = None, tz: tzinfo | None = None) -> dict:
+    """Every assignment the teacher commented on, whatever its due date,
+    most recent comment first, each with the whole comment thread: for
+    "what feedback did I get?" and "what did my professor say about Lab 2?"
+    when Lab 2 is long past the upcoming window."""
+    now = now or datetime.now(timezone.utc)
+    tz = tz or machine_zone()
+    found = []
+    for a in raw:
+        if not teacher_comment_count(a):
+            continue
+        latest = max((_parse(c.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc)) for c in _comments(a))
+        found.append((latest, {**_row(a, now, tz), "feedback": feedback(a, tz, now)}))
+    found.sort(key=lambda pair: pair[0], reverse=True)
+    out = {
+        "as_of": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "timezone": zone_name(tz),
+        "assignments": [row for _, row in found[:MAX_ROWS]],
+    }
+    if not found:
+        out["note"] = "No teacher comments on any of the student's submissions in this course."
+    if len(found) > MAX_ROWS:
+        out["more"] = len(found) - MAX_ROWS
+    return out
 
 
 def upcoming(raw: list[dict], days: int = DEFAULT_DAYS, only_unsubmitted: bool = False, now: datetime | None = None,
@@ -162,14 +222,22 @@ def upcoming(raw: list[dict], days: int = DEFAULT_DAYS, only_unsubmitted: bool =
             continue
         rows.append((due, row))
     rows.sort(key=lambda pair: pair[0])
+    shown = [r for _, r in rows[:MAX_ROWS]]
     out = {
         "as_of": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "timezone": zone_name(tz),
         "days": days,
-        "assignments": [r for _, r in rows[:MAX_ROWS]],
+        "assignments": shown,
     }
     if len(rows) > MAX_ROWS:
         out["more"] = len(rows) - MAX_ROWS
+    # Feedback usually lands on work graded weeks ago, outside this window,
+    # and in testing Sonnet widened `days` instead of finding with_feedback.
+    shown_ids = {r["assignment_id"] for r in shown}
+    elsewhere = sum(1 for a in raw if a.get("id") not in shown_ids and teacher_comment_count(a))
+    if elsewhere:
+        out["feedback_elsewhere"] = (f"{elsewhere} other assignment{'s' if elsewhere != 1 else ''} not listed here "
+                                     "have teacher comments: call again with with_feedback=true to read them.")
     return out
 
 
@@ -231,6 +299,7 @@ def detail(assignment: dict, now: datetime | None = None, tz: tzinfo | None = No
         "points_possible": assignment.get("points_possible"),
         "description": description,
         "rubric": _rubric(assignment),
+        "feedback": feedback(assignment, tz, now),
         "submission": {
             "status": _status(assignment, now),
             "score": submission.get("score"),

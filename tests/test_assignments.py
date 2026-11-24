@@ -139,6 +139,86 @@ def test_detail_has_text_rubric_submission_and_dates():
     assert out["url"].endswith("/assignments/7")
 
 
+ME = 151
+PROF = 4127
+
+
+def _comment(author_id, text, created, name="Prof. Lee", attempt=1):
+    return {"id": hash(text) % 10_000, "author_id": author_id, "author_name": name, "comment": text,
+            "created_at": _iso(created), "edited_at": None, "attempt": attempt}
+
+
+def _commented(aid, name, due, comments):
+    return _a(aid, name, due, {**GRADED, "user_id": ME, "submission_comments": comments})
+
+
+def test_detail_gives_the_comment_thread_in_order_in_the_students_zone():
+    raw = _commented(9, "Lab 2", NOW - timedelta(days=30), [
+        _comment(PROF, "Your test plan skips the error paths.\nSee section 3.", NOW - timedelta(days=20)),
+        _comment(ME, "Thanks, will fix", NOW - timedelta(days=19), name="Arthur"),
+        _comment(PROF, "   ", NOW - timedelta(days=18)),
+    ])
+
+    out = assignments.detail(raw, now=NOW, tz=LA)
+
+    assert out["feedback"] == [
+        {"from": "Prof. Lee", "at": "Sun, Oct 25, 10:00 AM PDT", "attempt": 1,
+         "comment": "Your test plan skips the error paths.\nSee section 3."},
+        {"from": "you", "at": "Mon, Oct 26, 10:00 AM PDT", "attempt": 1, "comment": "Thanks, will fix"},
+    ]
+
+
+def test_detail_without_comments_has_empty_feedback():
+    assert assignments.detail(_a(8, "Reading response", None, UNSUBMITTED), now=NOW)["feedback"] == []
+
+
+def test_rows_count_only_the_teachers_comments():
+    raw = [_commented(1, "Lab 2", NOW - timedelta(days=1), [
+        _comment(PROF, "Nice", NOW), _comment(ME, "thanks", NOW), _comment(PROF, "One more thing", NOW)]),
+        _a(2, "Lab 3", NOW + timedelta(days=1), UNSUBMITTED)]
+
+    rows = assignments.upcoming(raw, days=7, now=NOW)["assignments"]
+
+    assert rows[0]["teacher_comments"] == 2
+    assert "teacher_comments" not in rows[1]
+
+
+def test_upcoming_points_to_feedback_outside_its_window():
+    raw = [_commented(1, "Lab 1", NOW - timedelta(days=60), [_comment(PROF, "Old note", NOW - timedelta(days=50))]),
+           _commented(2, "Lab 2", NOW - timedelta(days=1), [_comment(PROF, "Shown", NOW)]),
+           _commented(3, "Lab 3", NOW - timedelta(days=40), [_comment(ME, "my own reply", NOW)])]
+
+    out = assignments.upcoming(raw, days=7, now=NOW)
+
+    assert [a["name"] for a in out["assignments"]] == ["Lab 2"]
+    assert out["feedback_elsewhere"].startswith("1 other assignment not listed")
+    assert "with_feedback=true" in out["feedback_elsewhere"]
+    assert "feedback_elsewhere" not in assignments.upcoming(raw[1:], days=7, now=NOW)
+
+
+def test_with_feedback_lists_commented_work_of_any_date_latest_comment_first():
+    raw = [
+        _commented(1, "Lab 1", NOW - timedelta(days=90), [_comment(PROF, "Old note", NOW - timedelta(days=80))]),
+        _commented(2, "Lab 2", NOW - timedelta(days=60), [_comment(PROF, "Recent note", NOW - timedelta(days=2))]),
+        _commented(3, "Lab 3", NOW - timedelta(days=1), [_comment(ME, "Is this late?", NOW)]),
+        _a(4, "Lab 4", NOW - timedelta(days=1), GRADED),
+    ]
+
+    out = assignments.with_feedback(raw, now=NOW, tz=LA)
+
+    assert [a["name"] for a in out["assignments"]] == ["Lab 2", "Lab 1"]
+    assert out["assignments"][0]["feedback"][0]["comment"] == "Recent note"
+    assert out["assignments"][0]["score"] == 42.0
+    assert "note" not in out
+
+
+def test_with_feedback_says_when_there_is_none():
+    out = assignments.with_feedback([_a(4, "Lab 4", NOW, GRADED)], now=NOW, tz=LA)
+
+    assert out["assignments"] == []
+    assert "No teacher comments" in out["note"]
+
+
 def test_detail_without_a_rubric_says_so():
     out = assignments.detail(_a(8, "Reading response", None, UNSUBMITTED))
 
