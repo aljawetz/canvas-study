@@ -235,6 +235,13 @@ def test_list_assignment_groups_includes_assignments_and_submissions():
 
 
 @respx.mock
+def test_list_assignments_includes_the_submission_and_its_comments():
+    route = respx.get(f"{BASE}/courses/55016/assignments").mock(return_value=httpx.Response(200, json=[]))
+    canvas.list_assignments(55016)
+    assert route.calls[0].request.url.params.get_list("include[]") == ["submission", "submission_comments"]
+
+
+@respx.mock
 def test_get_course_grades_asks_for_total_scores():
     route = respx.get(f"{BASE}/courses/55016").mock(return_value=httpx.Response(200, json={"id": 55016}))
     assert canvas.get_course_grades(55016) == {"id": 55016}

@@ -9,7 +9,8 @@ here calls a model. Its tools:
   repo was split out (that query set isn't here), it added about 0.2 s a search
   and no hit@5, and it is one less model to download.
 - list_course_items: a synced course's module outline, for complete lists.
-- list_assignments: deadlines, status, scores and rubrics, live from Canvas.
+- list_assignments: deadlines, status, scores, rubrics and teacher comments,
+  live from Canvas.
 - get_grades: the course total Canvas computed, plus grade categories with
   their weights and drop rules, live.
 - sync_course / sync_status: index a course in the background (sync_jobs.py).
@@ -63,8 +64,8 @@ NO_RESULTS = "No matching course material found for this search."
 INSTRUCTIONS = (
     "Canvas Study answers from the student's own Canvas courses. What the material says (slides, readings, "
     "syllabus, pages): call search_course_material before answering. Deadlines, what is due, submission "
-    "status, scores and rubrics: call list_assignments, which reads Canvas live. The student's overall grade, "
-    "or how much a category (exams, homework) is worth: call get_grades. Complete lists of what a course has "
+    "status, scores, rubrics and teacher feedback: call list_assignments, which reads Canvas live. The "
+    "student's overall grade, or how much a category (exams, homework) is worth: call get_grades. Complete lists of what a course has "
     "(every reading in week 3, all the quizzes): call list_course_items, which lists names only; search for "
     "what an item says. Use list_courses for the course id; a course that is not indexed can't be searched "
     "yet, so offer to sync it with sync_course (list_assignments works without a sync). Course facts come "
@@ -353,7 +354,7 @@ def canvas_zone():
 
 def list_assignments_result(home: Path, course_id: int, fetch, days: int, only_unsubmitted: bool,
                             assignment_id: int | None, zone=assignments.machine_zone,
-                            description_offset: int = 0) -> dict:
+                            description_offset: int = 0, with_feedback: bool = False) -> dict:
     try:
         raw = fetch(course_id)
     except CANVAS_ERRORS as e:
@@ -364,6 +365,8 @@ def list_assignments_result(home: Path, course_id: int, fetch, days: int, only_u
         if match is None:
             return {"course_id": course_id, "note": f"No assignment {assignment_id} in this course on Canvas."}
         return {"course_id": course_id, **assignments.detail(match, tz=zone(), description_offset=description_offset)}
+    if with_feedback:
+        return {"course_id": course_id, **assignments.with_feedback(raw, tz=zone())}
     return {"course_id": course_id, **assignments.upcoming(raw, days, only_unsubmitted, tz=zone())}
 
 
@@ -443,14 +446,17 @@ def build_server(home: Path | None = None, searcher: Searcher | None = None, cou
 
     @server.tool()
     def list_assignments(course_id: int, days: int = assignments.DEFAULT_DAYS, only_unsubmitted: bool = False,
-                         assignment_id: int | None = None, description_offset: int = 0) -> dict:
+                         assignment_id: int | None = None, description_offset: int = 0,
+                         with_feedback: bool = False) -> dict:
         """Live from Canvas: every assignment due in the next `days` days and the last week, submitted or not,
         each with its submission status and score. Times come in the student's zone: show due_at_display as
         given. Pass only_unsubmitted when the student asks only for what is left to hand in. With
-        assignment_id: that one assignment's description, rubric, submission and score. A very long description
-        comes with description_cut; pass its description_offset to read the rest."""
+        assignment_id: that one assignment's description, rubric, submission, score and the teacher's comments
+        on the submission. A very long description comes with description_cut; pass its description_offset to
+        read the rest. with_feedback: every assignment the teacher commented on, any date, with the comments:
+        for what a professor or TA said about the student's work."""
         return list_assignments_result(home, course_id, assignments_for, days, only_unsubmitted, assignment_id,
-                                       zone_for, description_offset)
+                                       zone_for, description_offset, with_feedback)
 
     @server.tool()
     def get_grades(course_id: int) -> dict:

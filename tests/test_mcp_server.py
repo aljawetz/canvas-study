@@ -344,6 +344,20 @@ def test_list_assignments_with_an_id_returns_the_rubric(tmp_path):
     assert out["description"] == "Write tests."
 
 
+def test_list_assignments_with_feedback_reaches_past_the_upcoming_window(tmp_path):
+    old = {"id": 12, "name": "Lab 1", "due_at": "2026-01-20T05:00:00Z", "points_possible": 50, "html_url": "https://c/a/12",
+           "submission": {"workflow_state": "graded", "score": 40, "user_id": 7, "submission_comments": [
+               {"author_id": 99, "author_name": "Prof. Lee", "created_at": "2026-01-25T18:00:00Z", "comment": "Good start."}]}}
+    server = _assignments_server(tmp_path, lambda cid: RAW_ASSIGNMENTS + [old])
+
+    upcoming = _call(server, "list_assignments", {"course_id": COURSE})
+    out = _call(server, "list_assignments", {"course_id": COURSE, "with_feedback": True})
+
+    assert [a["name"] for a in upcoming["assignments"]] == ["Lab 3"]
+    assert [a["name"] for a in out["assignments"]] == ["Lab 1"]
+    assert out["assignments"][0]["feedback"][0]["comment"] == "Good start."
+
+
 def test_list_assignments_with_an_unknown_id_says_so(tmp_path):
     out = _call(_assignments_server(tmp_path, lambda cid: RAW_ASSIGNMENTS), "list_assignments",
                 {"course_id": COURSE, "assignment_id": 999})
