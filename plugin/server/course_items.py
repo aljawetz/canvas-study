@@ -52,12 +52,18 @@ def _tidy(text) -> str:
 
 
 def outline_rows(
-    structure: list[dict], page_links: dict[str, list[str]] | None = None, file_names: dict[str, str] | None = None
+    structure: list[dict], page_links: dict[str, list[str]] | None = None, file_names: dict[str, str] | None = None,
+    file_url=None,
 ) -> list[dict]:
     """`page_links` (page url -> linked file ids) and `file_names` (file id
     -> name) put the files a module's page links to right under that page,
     in a "Linked from <page>" section: 18-658's readings are such links, so
-    "week 3" then finds them with the page."""
+    "week 3" then finds them with the page; `file_url` (file id -> its Canvas
+    page) links them.
+
+    Every row keeps its Canvas link (an external link's own address), so the
+    listing hands Claude a citation per item: with only the modules page's
+    link beside the listing, Claude cited it in 3 of 16 eval runs (#35)."""
     page_links, file_names = page_links or {}, file_names or {}
     rows = []
     for module in structure:
@@ -77,26 +83,29 @@ def outline_rows(
                     "section": section,
                     "title": title,
                     "item_type": ITEM_TYPES.get(raw_type, raw_type.lower()),
-                    "url": str(item.get("external_url") or "") if raw_type == "ExternalUrl" else "",
+                    "url": str((item.get("external_url") if raw_type == "ExternalUrl" else item.get("html_url")) or ""),
                 }
             )
             if raw_type == "Page":
-                linked = [file_names[f] for f in page_links.get(item.get("page_url") or "", []) if f in file_names]
+                linked = [f for f in dict.fromkeys(page_links.get(item.get("page_url") or "", [])) if f in file_names]
                 rows += [
-                    {"module": module_name, "section": f"Linked from {title}", "title": name, "item_type": "file", "url": ""}
-                    for name in dict.fromkeys(linked)
+                    {"module": module_name, "section": f"Linked from {title}", "title": file_names[f], "item_type": "file",
+                     "url": file_url(f) if file_url else ""}
+                    for f in dict.fromkeys(linked)
                 ]
     return rows
 
 
-def group_rows(group: str, titles: list[str], item_type: str) -> list[dict]:
+def group_rows(group: str, items: list[tuple[str, str]], item_type: str) -> list[dict]:
     """Rows for items outside Modules, under a group named like a module
-    ("Announcements", "Other course files")."""
-    return [
-        {"module": group, "section": "", "title": _tidy(t), "item_type": item_type, "url": ""}
-        for t in dict.fromkeys(titles)
-        if _tidy(t)
-    ]
+    ("Announcements", "Other course files"). items: (title, Canvas link)."""
+    rows, seen = [], set()
+    for title, url in items:
+        title = _tidy(title)
+        if title and title not in seen:
+            seen.add(title)
+            rows.append({"module": group, "section": "", "title": title, "item_type": item_type, "url": url or ""})
+    return rows
 
 
 def save_outline(conn: sqlite3.Connection, rows: list[dict]) -> None:
@@ -149,8 +158,11 @@ def _matches(rows: list[dict], topic: str) -> list[dict]:
 
 
 def _item_line(row: dict) -> str:
-    kind = f"link: {row['url']}" if row["item_type"] == "link" and row["url"] else row["item_type"]
-    return f"- {row['title']} ({kind})"
+    """A markdown link to the item when its link is known, ready to cite."""
+    if not row["url"]:
+        return f"- {row['title']} ({row['item_type']})"
+    title = row["title"].replace("[", "\\[").replace("]", "\\]")
+    return f"- [{title}]({row['url']}) ({row['item_type']})"
 
 
 def format_listing(rows: list[dict], topic: str = "", types: list[str] | None = None) -> str:

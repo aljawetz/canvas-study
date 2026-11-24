@@ -11,7 +11,7 @@ STRUCTURE = [
     {
         "name": "Week 1: Introduction",
         "items": [
-            {"type": "Page", "title": "Welcome"},
+            {"type": "Page", "title": "Welcome", "html_url": "https://canvas.example.edu/courses/7/modules/items/1"},
             {"type": "SubHeader", "title": "Readings"},
             {"type": "File", "title": "Koskela Ch1-2 (M)"},
             {"type": "ExternalUrl", "title": "TDD primer", "external_url": "https://example.org/tdd"},
@@ -44,8 +44,9 @@ def test_outline_rows_flatten_modules_with_sub_headers_as_sections():
         ("Week 3: Elicitation", "", "Quiz 3", "quiz"),
         ("Week 30 extras", "", "Intros", "discussion"),
     ]
-    assert rows[2]["url"] == "https://example.org/tdd"
-    assert rows[0]["url"] == ""
+    assert rows[2]["url"] == "https://example.org/tdd"  # an external link's own address, not Canvas's redirect
+    assert rows[0]["url"] == "https://canvas.example.edu/courses/7/modules/items/1"
+    assert rows[1]["url"] == ""
 
 
 def test_outline_rows_skip_items_without_a_title_and_tidy_whitespace():
@@ -66,7 +67,9 @@ def test_no_filter_lists_everything_grouped_by_module_and_section():
     text = course_items.format_listing(_rows())
     assert "7 items" in text
     assert text.index("Week 1: Introduction") < text.index("Readings") < text.index("Koskela Ch1-2 (M) (file)")
-    assert "TDD primer (link: https://example.org/tdd)" in text
+    assert "- [TDD primer](https://example.org/tdd) (link)" in text
+    assert "- [Welcome](https://canvas.example.edu/courses/7/modules/items/1) (page)" in text
+    assert "- Koskela Ch1-2 (M) (file)" in text
     assert "Week 3: Elicitation" in text
 
 
@@ -162,3 +165,23 @@ def test_items_after_a_section_get_no_empty_section_header():
 
     assert "  :" not in text
     assert text.endswith("\n  - Quiz 1 (quiz)")
+
+
+def test_files_linked_from_a_page_get_their_own_canvas_link():
+    structure = [{"name": "Week 2", "items": [{"type": "Page", "title": "Readings", "page_url": "readings"}]}]
+    rows = course_items.outline_rows(structure, page_links={"readings": ["41", "42", "41"]},
+                                     file_names={"41": "Ch 4.pdf", "42": "Ch 5.pdf"},
+                                     file_url=lambda fid: f"https://c/courses/7/files/{fid}")
+    assert [(r["title"], r["url"]) for r in rows[1:]] == [("Ch 4.pdf", "https://c/courses/7/files/41"),
+                                                          ("Ch 5.pdf", "https://c/courses/7/files/42")]
+
+
+def test_group_rows_keep_each_items_link_and_drop_repeats_and_blanks():
+    rows = course_items.group_rows("Quizzes", [("Quiz 9", "https://c/q/9"), (" ", "https://c/q/0"),
+                                               ("Quiz 9", "https://c/q/99"), ("Quiz 10", None)], "quiz")
+    assert [(r["title"], r["url"]) for r in rows] == [("Quiz 9", "https://c/q/9"), ("Quiz 10", "")]
+
+
+def test_brackets_in_a_title_dont_break_its_markdown_link():
+    rows = [{"module": "M", "section": "", "title": "Lab [draft]", "item_type": "assignment", "url": "https://c/a/1"}]
+    assert "- [Lab \\[draft\\]](https://c/a/1) (assignment)" in course_items.format_listing(rows)

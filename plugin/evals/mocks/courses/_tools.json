@@ -46,7 +46,7 @@
     },
     {
       "name": "list_course_items",
-      "description": "Every item in a synced course's Canvas modules (files, pages, assignments, quizzes, links, ...),\ngrouped by module and section: for \"what are all the readings for week 3\" or \"list the quizzes\",\nwhich search can't answer completely. topic narrows it to a module, section or title (\"week 3\");\ntypes to item kinds (file, page, assignment, quiz, discussion, link, tool, announcement). Names\nonly: search_course_material for what an item says.",
+      "description": "Every item in a synced course's Canvas modules (files, pages, assignments, quizzes, links, ...),\ngrouped by module and section: for \"what are all the readings for week 3\" or \"list the quizzes\",\nwhich search can't answer completely. topic narrows it to a module, section or title (\"week 3\");\ntypes to item kinds (file, page, assignment, quiz, discussion, link, tool, announcement). Names\nonly: search_course_material for what an item says. Each item is a markdown link to it on Canvas: keep\nthe link when you list the item.",
       "inputSchema": {
         "type": "object",
         "properties": {

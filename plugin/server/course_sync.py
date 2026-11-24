@@ -16,6 +16,7 @@ from pathlib import Path
 import httpx
 
 import canvas
+import citation_links
 import course_items
 import ingestion
 import indexing
@@ -514,26 +515,31 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
         # The course outline, for list_course_items (course_items.py).
         # Like the deletion guards below, an empty listing never wipes one
         # already saved: a hidden modules tab looks the same as no modules.
-        outline = course_items.outline_rows(structure, page_links=page_links, file_names=all_file_names)
+        origin = canvas.origin()
+        file_url = lambda fid: citation_links.canvas_url(origin, course_id, "file", str(fid))
+        outline = course_items.outline_rows(structure, page_links=page_links, file_names=all_file_names,
+                                            file_url=file_url)
         # By id, not name: a module item's title often isn't its file's name.
         in_modules = {str(item.get("content_id")) for item in module_items if item.get("type") == "File"}
         in_modules |= {fid for url in module_page_urls for fid in page_links.get(url, [])}
         module_topics = {str(item.get("content_id")) for item in module_items if item.get("type") == "Discussion"}
         module_quizzes = {str(item.get("content_id")) for item in module_items if item.get("type") == "Quiz"}
         outline += course_items.group_rows(
-            "Other course files", sorted(n for fid, n in all_file_names.items() if fid not in in_modules), "file"
+            "Other course files",
+            sorted((n, file_url(fid)) for fid, n in all_file_names.items() if fid not in in_modules),
+            "file",
         )
         outline += course_items.group_rows(
-            "Announcements", [(t.get("title") or "").strip() for t in announcements], "announcement"
+            "Announcements", [(t.get("title") or "", t.get("html_url")) for t in announcements], "announcement"
         )
         outline += course_items.group_rows(
             "Discussions",
-            [(t.get("title") or "").strip() for t in discussions if str(t.get("id")) not in module_topics],
+            [(t.get("title") or "", t.get("html_url")) for t in discussions if str(t.get("id")) not in module_topics],
             "discussion",
         )
         outline += course_items.group_rows(
             "Quizzes",
-            [(q.get("title") or "").strip() for qid, q in quizzes_by_id.items() if qid not in module_quizzes],
+            [(q.get("title") or "", q.get("html_url")) for qid, q in quizzes_by_id.items() if qid not in module_quizzes],
             "quiz",
         )
         if outline:

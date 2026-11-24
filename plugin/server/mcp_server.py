@@ -436,7 +436,8 @@ def build_server(home: Path | None = None, searcher: Searcher | None = None, cou
         grouped by module and section: for "what are all the readings for week 3" or "list the quizzes",
         which search can't answer completely. topic narrows it to a module, section or title ("week 3");
         types to item kinds (file, page, assignment, quiz, discussion, link, tool, announcement). Names
-        only: search_course_material for what an item says."""
+        only: search_course_material for what an item says. Each item is a markdown link to it on Canvas: keep
+        the link when you list the item."""
         out = {"listing": course_items.list_for_course(home, course_id, topic, types),
                "url": f"{canvas.origin()}/courses/{course_id}/modules"}
         refresh = refresh_if_stale(home, jobs, course_id)
