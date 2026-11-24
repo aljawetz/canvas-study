@@ -52,3 +52,18 @@ def test_long_sections_split_under_the_embedding_window():
     assert all(n.text.startswith("Syllabus › Course Calendar\n") for n in nodes)
     assert all(len(indexing._tokenize(n.text)) <= 512 for n in nodes)
     assert all(n.metadata["item_type"] == "syllabus" and n.metadata["page"] is None for n in nodes)
+
+
+def test_only_files_named_like_a_syllabus_are_marked():
+    chunks = [indexing.Chunk("Week 3 covers mocks.", {"source": "x", "item_type": "file", "page": 1, "slide": None}, "file:1")]
+    assert indexing.mark_syllabus_file(chunks, "Lecture 3.pdf") == chunks
+    [marked] = indexing.mark_syllabus_file(chunks, "CMUiii_SYLLABUS_v2.pdf")
+    assert marked.text == "Course syllabus: CMUiii_SYLLABUS_v2.pdf\nWeek 3 covers mocks."
+    assert marked.metadata == chunks[0].metadata and marked.item_id == "file:1"
+
+
+def test_a_marked_full_page_still_fits_the_embedding_window():
+    page = [{"page": 1, "text": " ".join(f"Topic {i} is covered in week {i % 14}." for i in range(400))}]
+    name = "Course Syllabus and Schedule for Software Requirements and Interaction Design, Fall 2026.pdf"
+    chunks = indexing.mark_syllabus_file(indexing.pages_to_nodes(page, name, "file:9"), name)
+    assert len(chunks) > 1 and all(len(indexing._tokenize(c.text)) <= 512 for c in chunks)
