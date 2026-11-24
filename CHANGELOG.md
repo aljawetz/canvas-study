@@ -3,6 +3,11 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.3.3 (2026-11-24)
+
+- **Teacher feedback:** ask "What did my professor say about Lab 2?" or "What feedback did I get?" and Claude reads
+  the comments your teachers and TAs left on your submissions, live from Canvas, including on work graded weeks ago.
+
 ## 0.3.2 (2026-11-24)
 
 - **Better answers to course-level questions:** "What is this course about?", "What will I learn?" and "What topics
