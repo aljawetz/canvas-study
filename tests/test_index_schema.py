@@ -30,9 +30,13 @@ def _page():
     return indexing.sections_to_nodes([{"heading": "Grading", "text": "Project 40%"}], "Syllabus", "syllabus:1", "syllabus")
 
 
+def _unit(text):
+    return [1.0] + [0.0] * (indexing.EMBEDDING_DIM - 1)
+
+
 def _anchors(db_path: Path) -> dict[str, tuple]:
     df = lancedb.connect(str(db_path)).open_table(TABLE).to_pandas()
-    return {m["item_type"] + ":" + m["source"]: (m["page"], m["slide"], m["timestamp"]) for m in df["metadata"]}
+    return {m["item_type"] + ":" + m["source"]: (m["page"], m["slide"]) for m in df["metadata"]}
 
 
 
@@ -47,12 +51,12 @@ def _anchors(db_path: Path) -> dict[str, tuple]:
 def test_any_material_order_indexes_into_one_course(tmp_path, order):
     makers = {"page": _page, "pdf": _pdf, "slides": _slides}
     for kind in order:
-        indexing.add_nodes(makers[kind](), tmp_path, TABLE)
+        indexing.add_nodes(makers[kind](), tmp_path, TABLE, embed=_unit)
 
     assert _anchors(tmp_path) == {
-        "syllabus:Syllabus": (None, None, None),
-        "file:BVA.pdf": (3, None, None),
-        "file:deck.pptx": (None, 2, None),
+        "syllabus:Syllabus": (None, None),
+        "file:BVA.pdf": (3, None),
+        "file:deck.pptx": (None, 2),
     }
     assert lancedb.connect(str(tmp_path)).open_table(TABLE).schema == indexing.TABLE_SCHEMA
 

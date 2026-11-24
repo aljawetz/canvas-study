@@ -1,101 +1,166 @@
 """Chunking + indexing.
 
-Turns ingestion.py's extraction output into LlamaIndex nodes carrying
-citation metadata: a page or slide is a node, not an arbitrary token
-window, and SentenceSplitter only kicks in for prose long enough to need
-it. Each course is one LanceDB table (<data folder>/index.lancedb/
-course_<id>), through LlamaIndex's LanceDB integration. Callers pass
-db_path: the plugin's data folder, or a scratch dir in tests.
+Turns ingestion.py's extraction output into chunks carrying citation
+metadata: a page or slide is a chunk, not an arbitrary token window, and
+split_text only cuts prose long enough to need it. Each course is one
+LanceDB table (<data folder>/index.lancedb/course_<id>) written directly.
+Callers pass db_path: the plugin's data folder, or a scratch dir in tests.
 """
 
+import re
+import uuid
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import lancedb
 import pyarrow as pa
 from lancedb.expr import col, lit
 from lancedb.index import FTS
-from llama_index.core import StorageContext, VectorStoreIndex, set_global_tokenizer
-from llama_index.core.node_parser import SentenceSplitter
-from llama_index.core.schema import NodeRelationship, RelatedNodeInfo, TextNode
-from llama_index.vector_stores.lancedb import LanceDBVectorStore
 from tokenizers import Tokenizer
 
-from embeddings import EMBEDDING_DIM, MODEL_DIR, OnnxBgeEmbedding
+from embeddings import EMBEDDING_DIM, MODEL_DIR
 
-# Tokens, counted with BGE's own tokenizer (below). Must stay under the
-# embedding model's 512-token window (embeddings.MAX_SEQ_LENGTH), with room
-# for sections_to_nodes()'s heading line: the embedding silently truncates
+# Tokens, counted with BGE's own tokenizer. Must stay under the embedding
+# model's 512-token window (embeddings.MAX_SEQ_LENGTH), with room for
+# sections_to_nodes()'s heading line: the embedding silently truncates
 # anything past 512. At the old 700, 23% of real chunks ran over, and the
-# part past the cut was invisible to vector search — 18-654's grading table
+# part past the cut was invisible to vector search: 18-654's grading table
 # started at token 513 of its syllabus chunk, and search never found it.
-CHUNK_SIZE = 450
-CHUNK_OVERLAP = 60  # ~15%, same ratio as before
+# 400 is what the index actually held before this splitter: llama-index's
+# limit was 450 but it counted each chunk's metadata against it, so a split
+# page's largest chunk had a median of 405 tokens. Splitting to a true 450
+# kept hit@5 but put the right page at #1 less often (search benchmark,
+# 225 questions), so the smaller, more focused chunks stay.
+CHUNK_SIZE = 400
+CHUNK_OVERLAP = 60  # ~15%
 
-# Chunks are counted in BGE's own tokens, not SentenceSplitter's default
-# tiktoken: a "450-token" chunk by tiktoken's count can run past BGE's real
-# 512-token window. Loaded on first use, not at import: the server imports
-# this module before setup has downloaded the models
-# (tests/test_plugin_imports.py).
+# Loaded on first use, not at import: the server imports this module before
+# setup has downloaded the models (tests/test_plugin_imports.py).
 _bge_tokenizer: Tokenizer | None = None
 
 
-def _tokenize(text: str) -> list[str]:
+def _tokenizer() -> Tokenizer:
     global _bge_tokenizer
     if _bge_tokenizer is None:
         _bge_tokenizer = Tokenizer.from_file(str(MODEL_DIR / "tokenizer.json"))
-    return _bge_tokenizer.encode(text).tokens
-
-# llama-index falls back to this global (tiktoken by default) wherever it
-# counts tokens itself; with ours set, nothing ever loads tiktoken, which
-# downloads its encoding on first use.
-set_global_tokenizer(_tokenize)
-
-_splitter = SentenceSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP, tokenizer=_tokenize)
+    return _bge_tokenizer
 
 
-def _with_ref_doc(node: TextNode, canvas_item_id: str) -> TextNode:
-    """Sets the node's ref_doc_id to canvas_item_id, which is what
-    both the LanceDB integration's doc_id column and delete_ref_doc rely on."""
-    node.relationships[NodeRelationship.SOURCE] = RelatedNodeInfo(node_id=canvas_item_id)
-    return node
+def _tokenize(text: str) -> list[str]:
+    return _tokenizer().encode(text).tokens
 
 
-def _metadata(source: str, item_type: str, *, page=None, slide=None, timestamp=None) -> dict:
-    """Every node carries the same metadata keys, most of them None: see
-    TABLE_SCHEMA. "timestamp" is never set any more but stays in the
-    schema, so tables built before it was retired still accept inserts."""
-    return {"source": source, "item_type": item_type, "page": page, "slide": slide, "timestamp": timestamp}
+def _count(text: str) -> int:
+    return len(_tokenizer().encode(text, add_special_tokens=False).ids)
 
 
-def pages_to_nodes(pages: list[dict], source: str, canvas_item_id: str, item_type: str = "file") -> list[TextNode]:
-    """One node per page, split further only if the page's prose actually
-    exceeds the target chunk size — most extracted pages don't.
+def _pieces(text: str, separator: str) -> list[str]:
+    """text cut after each match of separator, each piece keeping its
+    separator, so "".join(pieces) == text."""
+    out, start = [], 0
+    for m in re.finditer(separator, text):
+        if m.end() > start:
+            out.append(text[start:m.end()])
+            start = m.end()
+    if start < len(text):
+        out.append(text[start:])
+    return out
+
+
+def _token_windows(text: str, size: int) -> list[str]:
+    """A run with no usable break (a long URL, a table without spaces), cut every size tokens."""
+    enc = _tokenizer().encode(text, add_special_tokens=False)
+    cuts = [enc.offsets[i][0] for i in range(size, len(enc.ids), size)]
+    bounds = [0, *cuts, len(text)]
+    return [text[a:b] for a, b in zip(bounds, bounds[1:]) if b > a]
+
+
+# Coarsest break first: paragraphs, then sentences, then lines, then words.
+# Lines come after sentences because PDF text breaks every printed line,
+# mid-sentence: a chunk cut at a line wrap starts mid-thought and buries the
+# next topic in the middle of the chunk before it.
+_SEPARATORS = [r"\n\s*\n", r"(?<=[.!?])\s+", r"\n", r"\s+"]
+
+
+def _units(text: str, size: int, level: int = 0) -> list[str]:
+    """text cut into pieces of at most size tokens, at the coarsest break that gets there."""
+    if _count(text) <= size:
+        return [text]
+    if level == len(_SEPARATORS):
+        return _token_windows(text, size)
+    pieces = _pieces(text, _SEPARATORS[level])
+    if len(pieces) == 1:
+        return _units(text, size, level + 1)
+    return [u for piece in pieces for u in _units(piece, size, level + 1)]
+
+
+def split_text(text: str, size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
+    """Chunks of at most size tokens. Text that fits stays whole (most pages
+    do); longer text is packed from paragraphs, sentences or words, and each
+    chunk after the first starts with up to overlap tokens from the end of
+    the one before, so a sentence cut at a boundary is still found whole."""
+    if _count(text) <= size:
+        return [text.strip()] if text.strip() else []
+    units = [(u, _count(u)) for u in _units(text, size)]
+    chunks, current, tokens = [], [], 0
+    for unit, n in units:
+        if current and tokens + n > size:
+            chunks.append("".join(u for u, _ in current))
+            kept, kept_tokens = [], 0
+            for u, m in reversed(current):
+                if kept_tokens + m > overlap or kept_tokens + m + n > size:
+                    break
+                kept.insert(0, (u, m))
+                kept_tokens += m
+            current, tokens = kept, kept_tokens
+        current.append((unit, n))
+        tokens += n
+    if current:
+        chunks.append("".join(u for u, _ in current))
+    return [c.strip() for c in chunks if c.strip()]
+
+
+@dataclass
+class Chunk:
+    """What gets embedded and stored: the text, its citation metadata, and
+    the Canvas item it came from (e.g. "file:123"), which delete works by."""
+
+    text: str
+    metadata: dict
+    item_id: str
+
+
+def _metadata(source: str, item_type: str, *, page=None, slide=None) -> dict:
+    """Every chunk carries the same metadata keys, most of them None: see TABLE_SCHEMA."""
+    return {"source": source, "item_type": item_type, "page": page, "slide": slide}
+
+
+def pages_to_nodes(pages: list[dict], source: str, canvas_item_id: str, item_type: str = "file") -> list[Chunk]:
+    """One chunk per page, split further only if the page's prose actually
+    exceeds the target chunk size: most extracted pages don't.
 
     item_type is "file" for PDFs; course_sync.py passes other types for
     Canvas content that isn't paginated, whose pages carry page=None."""
-    nodes = []
-    for page in pages:
-        text = page["text"]
-        if not text.strip():
-            continue
-        for chunk in _splitter.split_text(text):
-            node = TextNode(text=chunk, metadata=_metadata(source, item_type, page=page["page"]))
-            nodes.append(_with_ref_doc(node, canvas_item_id))
-    return nodes
+    return [
+        Chunk(chunk, _metadata(source, item_type, page=page["page"]), canvas_item_id)
+        for page in pages
+        for chunk in split_text(page["text"])
+    ]
 
 
-def sections_to_nodes(sections: list[dict], source: str, canvas_item_id: str, item_type: str) -> list[TextNode]:
-    """Canvas HTML sections (ingestion.extract_html_sections) -> nodes, one
+def sections_to_nodes(sections: list[dict], source: str, canvas_item_id: str, item_type: str) -> list[Chunk]:
+    """Canvas HTML sections (ingestion.extract_html_sections) -> chunks, one
     section at a time so a chunk never mixes sections (a syllabus's grading
     table no longer shares a chunk with its staff list).
 
     Every chunk starts with a "Syllabus › Grading Algorithm" line, so both
-    the embedding and Claude see what the chunk is part of even when
-    the section's own text is just "12.5% | Project" rows. A heading with no
-    text of its own ("Class Schedule" directly followed by another bold
-    line) becomes a line of the next section instead of a near-empty chunk."""
-    nodes = []
+    the embedding and Claude see what the chunk is part of even when the
+    section's own text is just "12.5% | Project" rows. The heading line is
+    counted against the chunk size, so heading plus text stays under the
+    embedding window. A heading with no text of its own ("Class Schedule"
+    directly followed by another bold line) becomes a line of the next
+    section instead of a near-empty chunk."""
+    chunks = []
     pending: list[str] = []
     for section in sections:
         if not section["text"]:
@@ -105,98 +170,54 @@ def sections_to_nodes(sections: list[dict], source: str, canvas_item_id: str, it
         path = f"{source} › {section['heading']}" if section["heading"] else source
         body = "\n".join([*pending, section["text"]])
         pending = []
-        for chunk in _splitter.split_text(body):
-            node = TextNode(text=f"{path}\n{chunk}", metadata=_metadata(source, item_type))
-            nodes.append(_with_ref_doc(node, canvas_item_id))
+        room = max(CHUNK_SIZE - _count(path) - 1, CHUNK_SIZE // 2)
+        for chunk in split_text(body, size=room):
+            chunks.append(Chunk(f"{path}\n{chunk}", _metadata(source, item_type), canvas_item_id))
     if pending:
-        node = TextNode(text=f"{source}\n" + "\n".join(pending), metadata=_metadata(source, item_type))
-        nodes.append(_with_ref_doc(node, canvas_item_id))
-    return nodes
+        chunks.append(Chunk(f"{source}\n" + "\n".join(pending), _metadata(source, item_type), canvas_item_id))
+    return chunks
 
 
-def slides_to_nodes(slides: list[dict], source: str, canvas_item_id: str) -> list[TextNode]:
-    """One node per slide, not split — a slide is a citation unit
+def slides_to_nodes(slides: list[dict], source: str, canvas_item_id: str) -> list[Chunk]:
+    """One chunk per slide, not split: a slide is a citation unit
     ("slide 12"), not something to fragment across chunks."""
-    nodes = []
-    for slide in slides:
-        text = slide["text"]
-        if not text.strip():
-            continue
-        node = TextNode(text=text, metadata=_metadata(source, "file", slide=slide["slide"]))
-        nodes.append(_with_ref_doc(node, canvas_item_id))
-    return nodes
+    return [
+        Chunk(slide["text"], _metadata(source, "file", slide=slide["slide"]), canvas_item_id)
+        for slide in slides
+        if slide["text"].strip()
+    ]
 
 
 # Every course table's layout, stated up front instead of inferred. LanceDB
 # otherwise infers column types from the first batch written, and a column
-# that's None in every node of that batch becomes type null for good, so
-# whichever material reached a course first decided what it could ever
+# that's None in every row of that batch becomes type null for good, so
+# whichever material reached a course first would decide what it could ever
 # hold (a course whose first batch had no page numbers rejected every PDF).
-# The metadata fields are _metadata()'s keys plus the ones llama-index's
-# node_to_metadata_dict adds, in its order.
-_METADATA_TYPE = pa.struct(
-    [
-        ("source", pa.string()),
-        ("item_type", pa.string()),
-        ("page", pa.int64()),
-        ("slide", pa.int64()),
-        ("timestamp", pa.string()),
-        ("_node_content", pa.string()),
-        ("_node_type", pa.string()),
-        ("document_id", pa.string()),
-        ("doc_id", pa.string()),
-        ("ref_doc_id", pa.string()),
-    ]
-)
 TABLE_SCHEMA = pa.schema(
     [
         ("id", pa.string()),
-        ("doc_id", pa.string()),
+        ("doc_id", pa.string()),  # the Canvas item id, e.g. "file:123"
         ("vector", pa.list_(pa.float32(), EMBEDDING_DIM)),
         ("text", pa.string()),
-        ("metadata", _METADATA_TYPE),
+        ("metadata", pa.struct([
+            ("source", pa.string()),
+            ("item_type", pa.string()),
+            ("page", pa.int64()),
+            ("slide", pa.int64()),
+        ])),
     ]
 )
 
+_embedder = None
 
 
-class _PatchedLanceDBVectorStore(LanceDBVectorStore):
-    """Two changes to llama-index's LanceDB store.
+def _default_embed(text: str) -> list[float]:
+    global _embedder
+    if _embedder is None:
+        from embeddings import OnnxBgeEmbedding
 
-    delete(): upstream (still in 0.7.0) builds `doc_id = "x"` with double
-    quotes, which LanceDB's SQL parses as a column name, so every delete
-    fails. This uses LanceDB's col/lit expressions instead. Remove once
-    upstream fixes it.
-
-    add(): creates a missing table with TABLE_SCHEMA rather than letting
-    the base class infer one from the first batch."""
-
-    def delete(self, ref_doc_id: str, **delete_kwargs: Any) -> None:
-        self.table.delete(col(self.doc_id_key) == lit(ref_doc_id))
-
-    def add(self, nodes, **add_kwargs: Any) -> list[str]:
-        if self._table is None and nodes:
-            self._table = self._connection.create_table(self._table_name, schema=TABLE_SCHEMA, mode=self.mode)
-        return super().add(nodes, **add_kwargs)
-
-
-def build_index(nodes: list[TextNode], db_path: Path, table_name: str) -> VectorStoreIndex:
-    vector_store = _PatchedLanceDBVectorStore(uri=str(db_path), table_name=table_name)
-    storage_context = StorageContext.from_defaults(vector_store=vector_store)
-    # Explicit transformations: the default is a tiktoken SentenceSplitter.
-    index = VectorStoreIndex(
-        nodes, storage_context=storage_context, embed_model=OnnxBgeEmbedding(), transformations=[_splitter]
-    )
-    ensure_fts_index(vector_store.table)
-    return index
-
-
-def load_index(db_path: Path, table_name: str) -> VectorStoreIndex:
-    """Opens an existing table without adding nodes."""
-    vector_store = _PatchedLanceDBVectorStore(uri=str(db_path), table_name=table_name)
-    return VectorStoreIndex.from_vector_store(
-        vector_store, embed_model=OnnxBgeEmbedding(), transformations=[_splitter]
-    )
+        _embedder = OnnxBgeEmbedding()
+    return _embedder.embed(text)
 
 
 def open_table(db_path: Path, table_name: str):
@@ -211,27 +232,34 @@ def index_exists(db_path: Path, table_name: str) -> bool:
 
 
 def ensure_fts_index(table) -> None:
-    """BM25 full-text index for HybridSearcher (retrieval.py), which
-    exact names and keywords need. Built only when missing: LanceDB keeps it
-    on the table. Same settings and name (text_idx) as the deprecated
-    create_fts_index("text"), so indexes built before still match."""
+    """BM25 full-text index for HybridSearcher (retrieval.py), which exact
+    names and keywords need. Built only when missing: LanceDB keeps it on
+    the table, and rows added later are searched too (unindexed rows are
+    scanned until the index is optimized)."""
     if any(getattr(i, "index_type", None) == "FTS" for i in table.list_indices()):
         return
     table.create_index("text", config=FTS(), replace=True)
 
 
-def add_nodes(nodes: list[TextNode], db_path: Path, table_name: str) -> None:
-    """Adds to a course's table, creating it on the first write."""
-    if index_exists(db_path, table_name):
-        index = load_index(db_path, table_name)
-        index.insert_nodes(nodes)
-        ensure_fts_index(index.vector_store.table)
+def add_nodes(chunks: list[Chunk], db_path: Path, table_name: str, embed=None) -> None:
+    """Embeds chunks and adds them to a course's table, creating it on the
+    first write. embed is a test seam; by default the BGE model."""
+    if not chunks:
+        return
+    embed = embed or _default_embed
+    rows = [{"id": str(uuid.uuid4()), "doc_id": c.item_id, "vector": embed(c.text), "text": c.text,
+             "metadata": c.metadata} for c in chunks]
+    db = lancedb.connect(str(db_path))
+    if table_name in db.list_tables().tables:
+        table = db.open_table(table_name)
+        table.add(rows)
     else:
-        build_index(nodes, db_path, table_name)
+        table = db.create_table(table_name, data=rows, schema=TABLE_SCHEMA)
+    ensure_fts_index(table)
 
 
 def delete_ref_doc_nodes(db_path: Path, table_name: str, ref_doc_id: str) -> None:
     """Removes every chunk of one Canvas item (a changed or deleted file)."""
     if not index_exists(db_path, table_name):
         return
-    _PatchedLanceDBVectorStore(uri=str(db_path), table_name=table_name).delete(ref_doc_id)
+    open_table(db_path, table_name).delete(col("doc_id") == lit(ref_doc_id))

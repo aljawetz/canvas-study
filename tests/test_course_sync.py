@@ -322,7 +322,7 @@ def test_word_excel_and_text_files_are_indexed_as_sections(tmp_path, stub_extrac
     [node] = added
     assert node.text == f"{name} › Requirements\nTrack spending."
     assert (node.metadata["source"], node.metadata["item_type"]) == (name, "file")
-    assert node.ref_doc_id == "file:333"
+    assert node.item_id == "file:333"
 
 
 # --- Pages from Modules / front page / syllabus -----------------------------
@@ -725,7 +725,7 @@ def test_announcements_are_indexed_with_their_posted_date(tmp_path, stub_extract
     events = run(1, tmp_path)
     assert events[-1]["new"] == 1
     assert "announcement:7" in _manifest_ids(tmp_path)
-    text = " ".join(n.get_content() for n in added)
+    text = " ".join(n.text for n in added)
     assert "room 101" in text and "Oct 26, 2026" in text
     assert {n.metadata["item_type"] for n in added} == {"announcement"}
     assert added[0].metadata["source"] == "Class This Tuesday"
@@ -823,7 +823,7 @@ def test_quizzes_are_indexed_with_their_settings_and_replace_their_assignment(tm
 
     assert events[-1]["new"] == 2
     assert _manifest_ids(tmp_path) == {"quiz:4410", "assignment:991"}
-    quiz_text = " ".join(n.get_content() for n in added if n.metadata["item_type"] == "quiz")
+    quiz_text = " ".join(n.text for n in added if n.metadata["item_type"] == "quiz")
     for fact in ("Graded quiz.", "Worth 20 points.", "10 questions.", "Time limit: 30 minutes.", "2 attempts allowed.",
                  "lectures 8 and 9"):
         assert fact in quiz_text

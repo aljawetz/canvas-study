@@ -230,7 +230,7 @@ def _query_embedder():
         import model_download
 
         model_download.ensure_embedding_model()
-        _embed_query = embeddings.OnnxBgeEmbedding().get_query_embedding
+        _embed_query = embeddings.OnnxBgeEmbedding().embed
     return _embed_query
 
 

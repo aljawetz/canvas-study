@@ -52,7 +52,7 @@ def test_diff_item_types_are_independent(conn):
 def test_changed_and_deleted_items_end_to_end(tmp_path):
     """The plan's actual test: simulate a changed item and a deleted item,
     confirm both the manifest and the LanceDB table end up correct —
-    specifically that delete_ref_doc removed exactly the right chunks."""
+    specifically that delete_ref_doc_nodes removed exactly the right chunks."""
     conn = sync.open_manifest(tmp_path / "manifest.db")
 
     with tempfile.TemporaryDirectory() as db_dir:
@@ -63,11 +63,12 @@ def test_changed_and_deleted_items_end_to_end(tmp_path):
         old_b_pages = [{"page": 1, "text": "Content about topic B that will be deleted. " * 20}]
         nodes = indexing.pages_to_nodes(old_a_pages, "doc_a", "item_a")
         nodes += indexing.pages_to_nodes(old_b_pages, "doc_b", "item_b")
-        index = indexing.build_index(nodes, db_path, "course")
+        unit = lambda text: [1.0] + [0.0] * (indexing.EMBEDDING_DIM - 1)  # noqa: E731
+        indexing.add_nodes(nodes, db_path, "course", embed=unit)
         sync.mark_synced(conn, "item_a", "page", "Doc A", "2026-01-01", sync.content_hash(old_a_pages[0]["text"]))
         sync.mark_synced(conn, "item_b", "page", "Doc B", "2026-01-01", sync.content_hash(old_b_pages[0]["text"]))
 
-        table = index.vector_store.table
+        table = indexing.open_table(db_path, "course")
         assert table.count_rows() == 2
 
         # New sync: item_a's remote updated_at moved forward (changed),
@@ -79,18 +80,18 @@ def test_changed_and_deleted_items_end_to_end(tmp_path):
         new_a_pages = [{"page": 1, "text": "Updated content about topic A, now different. " * 20}]
         new_hash = sync.content_hash(new_a_pages[0]["text"])
         assert new_hash != sync.get_content_hash(conn, "item_a", "page")
-        index.delete_ref_doc("item_a", delete_from_docstore=True)
-        for node in indexing.pages_to_nodes(new_a_pages, "doc_a", "item_a"):
-            index.insert_nodes([node])
+        indexing.delete_ref_doc_nodes(db_path, "course", "item_a")
+        indexing.add_nodes(indexing.pages_to_nodes(new_a_pages, "doc_a", "item_a"), db_path, "course", embed=unit)
         sync.mark_synced(conn, "item_a", "page", "Doc A", "2026-01-02", new_hash)
 
         # Process "deleted": remove chunks, drop the manifest row.
-        index.delete_ref_doc("item_b", delete_from_docstore=True)
+        indexing.delete_ref_doc_nodes(db_path, "course", "item_b")
         sync.forget(conn, "item_b", "page")
 
         # LanceDB table: item_b's row is gone entirely, item_a has exactly
-        # one row with the *new* content, not the old one duplicated.
-        df = table.to_pandas()
+        # one row with the *new* content, not the old one duplicated. Opened
+        # again: a LanceDB handle keeps reading the version it was opened at.
+        df = indexing.open_table(db_path, "course").to_pandas()
         assert set(df["doc_id"]) == {"item_a"}
         assert len(df) == 1
         assert "Updated content" in df.iloc[0]["text"]
