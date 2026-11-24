@@ -12,5 +12,5 @@ OUT="$ROOT/plugin/server/constraints.txt"
   echo "#   uv lock && ./scripts/export-constraints"
   cd "$ROOT"
   uv export --frozen --only-group dev --no-emit-local --no-hashes --no-header --no-annotate \
-    --prune pytest --prune respx
+    --prune pytest --prune respx --prune pandas
 } > "$OUT"

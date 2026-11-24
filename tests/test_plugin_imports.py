@@ -1,6 +1,7 @@
 """The server must start on a student's machine before setup has downloaded
-the models, and without an LLM SDK (no tool calls a model; Claude Code is
-the LLM). Runs the imports in a fresh subprocess with those blocked.
+the models, without an LLM SDK (no tool calls a model; Claude Code is the
+LLM) and without llama-index, which it no longer uses. Runs the imports in a
+fresh subprocess with those blocked.
 """
 
 import os
@@ -10,7 +11,7 @@ from pathlib import Path
 
 SERVER = Path(__file__).resolve().parent.parent / "plugin" / "server"
 
-BLOCKED = ["openai", "llama_index.llms.openai"]
+BLOCKED = ["openai", "llama_index"]
 
 PROBE = f"""
 import importlib.abc, sys

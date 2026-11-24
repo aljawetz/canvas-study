@@ -31,9 +31,6 @@ if ! UVX="$(find_uvx)"; then
   UVX="$UV_DIR/uvx"
 fi
 
-# Real copies, not hard links (uv's default on Linux): recent nltk, which
-# llama-index uses, refuses to open a multiply-linked file.
-export UV_LINK_MODE=copy
 # Exact versions from uv.lock (server/constraints.txt): uvx ignores lockfiles,
 # so without them every install would resolve whatever is newest on PyPI.
 exec "$UVX" --python 3.13 --constraints "$PLUGIN_DIR/server/constraints.txt" \
