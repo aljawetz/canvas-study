@@ -3,6 +3,13 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.3.4 (2026-11-25)
+
+- **Clickable course listings:** "What quizzes are there?" and other full lists now link each item to its page on
+  Canvas. Existing courses get the links on their next sync, which happens on its own.
+- **Fresh results across sessions:** a search now sees a sync another Claude Code window just finished, instead of
+  the index as it was when this window first searched.
+
 ## 0.3.3 (2026-11-24)
 
 - **Teacher feedback:** ask "What did my professor say about Lab 2?" or "What feedback did I get?" and Claude reads
