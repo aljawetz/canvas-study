@@ -20,25 +20,25 @@ def conn(tmp_path):
 
 def test_diff_new_item(conn):
     result = sync.diff(conn, "page", [{"id": "1", "updated_at": "2026-01-01"}])
-    assert result == {"new": ["1"], "changed": [], "deleted": [], "unchanged": []}
+    assert result == {"new": ["1"], "changed": [], "deleted": []}
 
 
 def test_diff_unchanged_item(conn):
     sync.mark_synced(conn, "1", "page", "Test Page", "2026-01-01", "hash-a")
     result = sync.diff(conn, "page", [{"id": "1", "updated_at": "2026-01-01"}])
-    assert result == {"new": [], "changed": [], "deleted": [], "unchanged": ["1"]}
+    assert result == {"new": [], "changed": [], "deleted": []}
 
 
 def test_diff_changed_item(conn):
     sync.mark_synced(conn, "1", "page", "Test Page", "2026-01-01", "hash-a")
     result = sync.diff(conn, "page", [{"id": "1", "updated_at": "2026-01-02"}])
-    assert result == {"new": [], "changed": ["1"], "deleted": [], "unchanged": []}
+    assert result == {"new": [], "changed": ["1"], "deleted": []}
 
 
 def test_diff_deleted_item(conn):
     sync.mark_synced(conn, "1", "page", "Test Page", "2026-01-01", "hash-a")
     result = sync.diff(conn, "page", [])
-    assert result == {"new": [], "changed": [], "deleted": ["1"], "unchanged": []}
+    assert result == {"new": [], "changed": [], "deleted": ["1"]}
 
 
 def test_diff_item_types_are_independent(conn):
@@ -82,7 +82,7 @@ def test_changed_and_deleted_items_end_to_end(tmp_path):
         # New sync: item_a's remote updated_at moved forward (changed),
         # item_b is gone from the remote listing entirely (deleted).
         result = sync.diff(conn, "page", [{"id": "item_a", "updated_at": "2026-01-02"}])
-        assert result == {"new": [], "changed": ["item_a"], "deleted": ["item_b"], "unchanged": []}
+        assert result == {"new": [], "changed": ["item_a"], "deleted": ["item_b"]}
 
         # Process "changed": re-extract (simulated), hash differs -> replace.
         new_a_pages = [{"page": 1, "text": "Updated content about topic A, now different. " * 20}]
@@ -117,7 +117,7 @@ def test_diff_with_rebuild_counts_every_indexed_item_as_changed(conn):
 
     out = sync.diff(conn, "file", remote, rebuild=True)
 
-    assert out == {"new": ["file:3"], "changed": ["file:1"], "deleted": ["file:2"], "unchanged": []}
+    assert out == {"new": ["file:3"], "changed": ["file:1"], "deleted": ["file:2"]}
 
 
 def test_index_format_is_zero_until_stamped(conn):

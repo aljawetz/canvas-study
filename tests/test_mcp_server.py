@@ -623,31 +623,6 @@ def test_a_finished_sync_rewrites_the_session_note(tmp_path, monkeypatch):
     assert "Software Requirements" in (tmp_path / "session_start.json").read_text()
 
 
-def test_startup_backfills_missing_course_names_once(tmp_path):
-    _build_index(tmp_path)
-    calls = []
-
-    def courses():
-        calls.append(1)
-        return [{"id": COURSE, "name": "Software Requirements"}]
-
-    mcp_server.backfill_course_names(tmp_path, courses)
-    mcp_server.backfill_course_names(tmp_path, courses)  # names on disk now: Canvas isn't asked again
-
-    assert len(calls) == 1
-    assert "Software Requirements" in (tmp_path / "session_start.json").read_text()
-
-
-def test_backfill_without_canvas_or_index_does_nothing(tmp_path):
-    def offline():
-        raise httpx.ConnectError("offline")
-
-    mcp_server.backfill_course_names(tmp_path, offline)  # nothing indexed: Canvas never asked
-    _build_index(tmp_path)
-    mcp_server.backfill_course_names(tmp_path, offline)  # Canvas down: no crash, no note
-    assert not (tmp_path / "session_start.json").exists()
-
-
 # --- moving an install to a new index format (#36) ---------------------------
 
 def _old_install_course(home, course_id, fmt):
@@ -699,18 +674,6 @@ def test_search_on_a_course_being_rebuilt_says_so_and_points_to_live_tools(tmp_p
     assert "being re-indexed after a Canvas Study update" in out["note"]
     assert "list_assignments" in out["note"]
     assert "not indexed" not in out["note"]
-
-
-def test_the_old_lancedb_index_is_removed_only_when_nothing_needs_rebuilding(tmp_path):
-    (tmp_path / "index.lancedb" / "course_7.lance").mkdir(parents=True)
-    _old_install_course(tmp_path, 7, 0)
-
-    mcp_server.drop_old_index(tmp_path)
-    assert (tmp_path / "index.lancedb").exists()  # a window on the old version may still search it
-
-    _old_install_course(tmp_path, 7, indexing.INDEX_FORMAT)
-    mcp_server.drop_old_index(tmp_path)
-    assert not (tmp_path / "index.lancedb").exists()
 
 
 def test_search_during_a_rebuild_says_results_may_be_incomplete(tmp_path):

@@ -132,16 +132,6 @@ def rebuild_outdated(home: Path, jobs: "sync_jobs.SyncJobs") -> None:
         jobs.start(course_id)
 
 
-def drop_old_index(home: Path) -> None:
-    """Removes 0.3.5's LanceDB index once no course needs rebuilding: until
-    then a Claude Code window still on the old version may be searching it."""
-    old = home / "index.lancedb"
-    if old.exists() and not outdated_course_ids(home):
-        import shutil
-
-        shutil.rmtree(old, ignore_errors=True)
-
-
 PARTIAL = ("This course is being re-indexed after a Canvas Study update, so these results may be missing items "
            "that aren't back in the index yet.")
 REBUILDING = ("Course {cid} is being re-indexed after a Canvas Study update{progress}, so it can't be searched for a "
@@ -156,16 +146,6 @@ REFRESH_AFTER = timedelta(hours=6)
 RETRY_AFTER = timedelta(minutes=30)
 
 
-def _parse_time(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        moment = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
-
-
 def refresh_if_stale(home: Path, jobs: "sync_jobs.SyncJobs", course_id: int, token_check=None,
                      now: datetime | None = None) -> str | None:
     """Starts a background sync of an indexed course whose last sync is old,
@@ -178,7 +158,7 @@ def refresh_if_stale(home: Path, jobs: "sync_jobs.SyncJobs", course_id: int, tok
     state = status.get("state")
     if state == "running":
         return "This course is being refreshed from Canvas right now; results come from the last sync."
-    finished = _parse_time(status.get("finished_at"))
+    finished = canvas.parse_time(status.get("finished_at"))
     wait = REFRESH_AFTER if state == "done" else RETRY_AFTER
     if finished and now - finished < wait:
         return None
@@ -211,7 +191,6 @@ def last_synced_at(home: Path, course_id: int) -> str | None:
     return row[0] if row else None
 
 
-CANVAS_ERRORS = (canvas.CanvasError, httpx.HTTPStatusError, httpx.TransportError)
 
 
 def _course_row(home: Path, course_id: int, name: str | None, indexed: bool) -> dict:
@@ -229,7 +208,7 @@ def list_courses_result(home: Path, courses_for: Callable[[], list[dict]] = canv
     ids = indexed_course_ids(home)
     try:
         raw = courses_for()
-    except CANVAS_ERRORS as e:
+    except canvas.ERRORS as e:
         logger.warning("list_courses without Canvas: %s", e)
         return {
             "courses": [_course_row(home, cid, None, True) for cid in ids],
@@ -245,22 +224,6 @@ def list_courses_result(home: Path, courses_for: Callable[[], list[dict]] = canv
     session_note.remember_names(home, {r["course_id"]: r["name"] for r in rows if r["name"]})
     session_note.write_note(home, ids)
     return {"courses": rows}
-
-
-def backfill_course_names(home: Path, courses_for: Callable[[], list[dict]] = canvas.list_courses) -> None:
-    """Installs indexed before the session note existed have no course names on
-    disk, and a student who only asks concept questions may never trigger
-    list_courses to fetch them: then the note never appears. At startup, if an
-    indexed course has no name, read the names from Canvas once. Never raises."""
-    ids = indexed_course_ids(home)
-    if not ids or all(session_note.has_name(home, cid) for cid in ids):
-        return
-    try:
-        session_note.remember_names(home, {c["id"]: c.get("name") for c in courses_for()})
-    except CANVAS_ERRORS as e:
-        logger.info("course names not backfilled: %s", e)
-        return
-    session_note.write_note(home, ids)
 
 
 def make_searcher(index, embed):
@@ -406,7 +369,7 @@ def canvas_zone():
         if not cached:
             try:
                 name = canvas.get_profile().get("time_zone")
-            except (canvas.CanvasError, httpx.HTTPStatusError, httpx.TransportError) as e:
+            except canvas.ERRORS as e:
                 logger.warning("no time zone from Canvas, using this machine's: %s", e)
                 name = None
             cached.append(assignments.zone_from_name(name))
@@ -420,7 +383,7 @@ def list_assignments_result(home: Path, course_id: int, fetch, days: int, only_u
                             description_offset: int = 0, with_feedback: bool = False) -> dict:
     try:
         raw = fetch(course_id)
-    except CANVAS_ERRORS as e:
+    except canvas.ERRORS as e:
         logger.warning("list_assignments falling back to the index: %s", e)
         return {"course_id": course_id, **assignments.from_index_rows(_index_rows(home, course_id), _canvas_failure(e))}
     if assignment_id is not None:
@@ -437,7 +400,7 @@ def get_grades_result(course_id: int, course_for=canvas.get_course_grades,
                       groups_for=canvas.list_assignment_groups) -> dict:
     try:
         course, groups = course_for(course_id), groups_for(course_id)
-    except CANVAS_ERRORS as e:
+    except canvas.ERRORS as e:
         logger.warning("get_grades without Canvas: %s", e)
         return {"course_id": course_id, "note": f"{_canvas_failure(e)}, so grades can't be read right now."}
     url = f"{canvas.origin()}/courses/{course_id}/grades"
@@ -471,7 +434,6 @@ def build_server(home: Path | None = None, searcher: Searcher | None = None, cou
     def synced(course_id: int) -> None:
         searcher.forget(course_id)
         session_note.write_note(home, indexed_course_ids(home))
-        drop_old_index(home)
 
     jobs = jobs or sync_jobs.SyncJobs(home, on_done=synced)
     if rebuild_on_start:
@@ -570,13 +532,7 @@ def main() -> None:
     # httpx logs each request URL at INFO, and Canvas file downloads carry
     # signed tokens in theirs; Claude Code keeps the server's stderr in its logs.
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    # A daemon thread: a slow or unreachable Canvas never delays the server.
-    import threading
-
-    home = sm_home()
-    drop_old_index(home)
-    threading.Thread(target=backfill_course_names, args=(home,), daemon=True, name="backfill-names").start()
-    build_server(home, rebuild_on_start=True).run("stdio")
+    build_server(sm_home(), rebuild_on_start=True).run("stdio")
 
 
 if __name__ == "__main__":

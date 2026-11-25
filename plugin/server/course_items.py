@@ -40,8 +40,6 @@ ITEM_TYPES = {
     "ExternalUrl": "link",
     "ExternalTool": "tool",
 }
-# Plus announcements, which live outside Modules (course_sync's own group).
-TYPE_NAMES = sorted({*ITEM_TYPES.values(), "announcement"})
 # Enough for every item of the larger local course's modules at once (~100),
 # small enough to stay a few thousand tokens.
 MAX_ITEMS = 150

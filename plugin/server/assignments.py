@@ -17,6 +17,8 @@ import re
 from datetime import datetime, timedelta, timezone, tzinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+import canvas
+
 DEFAULT_DAYS = 14
 MAX_DAYS = 60
 OVERDUE_DAYS = 7
@@ -99,20 +101,11 @@ def when(moment: datetime, tz: tzinfo, now: datetime | None = None) -> dict:
     }
 
 
-def _parse(value: str | None) -> datetime | None:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError:
-        return None
-
-
 _DUE_LINE = re.compile(r"Due [A-Z][a-z]{2}, [A-Z][a-z]{2} \d{1,2}, \d{4}[^\n]*")
 
 
 def _due(assignment: dict) -> datetime | None:
-    return _parse(assignment.get("due_at"))
+    return canvas.parse_time(assignment.get("due_at"))
 
 
 def _status(assignment: dict, now: datetime) -> str:
@@ -147,7 +140,7 @@ def feedback(assignment: dict, tz: tzinfo, now: datetime) -> list[dict]:
     full. Canvas sends comments as plain text."""
     out = []
     for c in _comments(assignment):
-        at = _parse(c.get("created_at"))
+        at = canvas.parse_time(c.get("created_at"))
         out.append({
             "from": (c.get("author_name") or "teacher") if _from_teacher(assignment, c) else "you",
             **({"at": when(at, tz, now)["due_at_display"]} if at else {}),
@@ -186,7 +179,7 @@ def with_feedback(raw: list[dict], now: datetime | None = None, tz: tzinfo | Non
     for a in raw:
         if not teacher_comment_count(a):
             continue
-        latest = max((_parse(c.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc)) for c in _comments(a))
+        latest = max((canvas.parse_time(c.get("created_at")) or datetime.min.replace(tzinfo=timezone.utc)) for c in _comments(a))
         found.append((latest, {**_row(a, now, tz), "feedback": feedback(a, tz, now)}))
     found.sort(key=lambda pair: pair[0], reverse=True)
     out = {
@@ -282,7 +275,7 @@ def detail(assignment: dict, now: datetime | None = None, tz: tzinfo | None = No
     submission = assignment.get("submission") or {}
 
     def local(key: str) -> dict | None:
-        moment = _parse(assignment.get(key))
+        moment = canvas.parse_time(assignment.get(key))
         return when(moment, tz, now) if moment else None
 
     full = _text(assignment.get("description") or "")

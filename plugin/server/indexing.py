@@ -17,17 +17,6 @@ from tokenizers import Tokenizer
 import store
 from embeddings import EMBEDDING_DIM, MODEL_DIR
 
-# Tokens, counted with BGE's own tokenizer. Must stay under the embedding
-# model's 512-token window (embeddings.MAX_SEQ_LENGTH), with room for
-# sections_to_nodes()'s heading line: the embedding silently truncates
-# anything past 512. At the old 700, 23% of real chunks ran over, and the
-# part past the cut was invisible to vector search: 18-654's grading table
-# started at token 513 of its syllabus chunk, and search never found it.
-# 400 is what the index actually held before this splitter: llama-index's
-# limit was 450 but it counted each chunk's metadata against it, so a split
-# page's largest chunk had a median of 405 tokens. Splitting to a true 450
-# kept hit@5 but put the right page at #1 less often (search benchmark,
-# 225 questions), so the smaller, more focused chunks stay.
 # What an indexed chunk looks like: its text (splitting, headings like
 # "Course syllabus"), metadata and storage. Bump it in any change to those,
 # so every install's next sync re-indexes each course once in the new format
@@ -36,6 +25,14 @@ from embeddings import EMBEDDING_DIM, MODEL_DIR
 # 2: LanceDB -> SQLite (#36).
 INDEX_FORMAT = 2
 
+# Tokens, counted with BGE's own tokenizer. Must stay under the embedding
+# model's 512-token window (embeddings.MAX_SEQ_LENGTH), with room for
+# sections_to_nodes()'s heading line: the embedding silently truncates
+# anything past 512. At 700, 23% of real chunks ran over, and the part past
+# the cut was invisible to vector search: 18-654's grading table started at
+# token 513 of its syllabus chunk, and search never found it. 450 kept hit@5
+# but put the right page at #1 less often than 400 (search benchmark, 225
+# questions), so the smaller, more focused chunks stay.
 CHUNK_SIZE = 400
 CHUNK_OVERLAP = 60  # ~15%
 
@@ -49,10 +46,6 @@ def _tokenizer() -> Tokenizer:
     if _bge_tokenizer is None:
         _bge_tokenizer = Tokenizer.from_file(str(MODEL_DIR / "tokenizer.json"))
     return _bge_tokenizer
-
-
-def _tokenize(text: str) -> list[str]:
-    return _tokenizer().encode(text).tokens
 
 
 def _count(text: str) -> int:
@@ -136,18 +129,16 @@ class Chunk:
 
 
 def _metadata(source: str, item_type: str, *, page=None, slide=None) -> dict:
-    """Every chunk carries the same metadata keys, most of them None: see TABLE_SCHEMA."""
+    """Every chunk carries the same metadata keys (store.py's columns), most of them None."""
     return {"source": source, "item_type": item_type, "page": page, "slide": slide}
 
 
-def pages_to_nodes(pages: list[dict], source: str, canvas_item_id: str, item_type: str = "file") -> list[Chunk]:
-    """One chunk per page, split further only if the page's prose actually
-    exceeds the target chunk size: most extracted pages don't.
-
-    item_type is "file" for PDFs; course_sync.py passes other types for
-    Canvas content that isn't paginated, whose pages carry page=None."""
+def pages_to_nodes(pages: list[dict], source: str, canvas_item_id: str) -> list[Chunk]:
+    """One chunk per page of a file (PDF, DOCX, spreadsheet), split further
+    only if the page's prose actually exceeds the target chunk size: most
+    extracted pages don't."""
     return [
-        Chunk(chunk, _metadata(source, item_type, page=page["page"]), canvas_item_id)
+        Chunk(chunk, _metadata(source, "file", page=page["page"]), canvas_item_id)
         for page in pages
         for chunk in split_text(page["text"])
     ]
