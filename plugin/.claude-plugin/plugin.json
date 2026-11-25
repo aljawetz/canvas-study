@@ -1,7 +1,7 @@
 {
   "name": "canvas-study",
   "displayName": "Canvas Study",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Ask Claude about your Canvas courses: deadlines, grades and course materials, answered from your own courses with links to the Canvas page. Unofficial, not made by Instructure.",
   "author": {
     "name": "Arthur Jawetz"
