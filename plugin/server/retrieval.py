@@ -69,23 +69,23 @@ def reciprocal_rank_fusion(ranked_lists: list[list[Hit]], k: int = RRF_K, top_n:
 
 
 class HybridSearcher:
-    """Search over one course's table. embed turns a query into a unit-length vector."""
+    """Search over one course's index. embed turns a query into a unit-length
+    vector. The index answers vector(query_vector, limit) with (row, cosine
+    similarity) pairs and keyword(query, limit) with (row, BM25 score) pairs,
+    best first: store.CourseIndex, or indexing.LanceIndex."""
 
-    def __init__(self, table, embed, top_k: int = 5, cutoff: float = SIMILARITY_CUTOFF):
-        self._table = table
+    def __init__(self, index, embed, top_k: int = 5, cutoff: float = SIMILARITY_CUTOFF):
+        self._index = index
         self._embed = embed
         self._top_k = top_k
         self._cutoff = cutoff
 
     def vector(self, query: str) -> list[Hit]:
-        rows = (self._table.search(self._embed(query), vector_column_name="vector").distance_type("cosine")
-                .limit(VECTOR_CANDIDATES).to_list())
-        hits = [_hit(r, 1.0 - r["_distance"]) for r in rows]
+        hits = [_hit(row, score) for row, score in self._index.vector(self._embed(query), VECTOR_CANDIDATES)]
         return [h for h in hits if h.score >= self._cutoff]
 
     def keyword(self, query: str) -> list[Hit]:
-        rows = self._table.search(query, query_type="fts").limit(FTS_TOP_K).to_list()
-        return [_hit(r, float(r["_score"])) for r in rows]
+        return [_hit(row, score) for row, score in self._index.keyword(query, FTS_TOP_K)]
 
     def search(self, query: str) -> list[Hit]:
         return reciprocal_rank_fusion([self.vector(query), self.keyword(query)], top_n=self._top_k)

@@ -42,7 +42,7 @@ def retriever():
     with tempfile.TemporaryDirectory() as tmp:
         indexing.add_nodes(nodes, Path(tmp), "smoke_test")
         # Vector search only, no cutoff, top 3: what this smoke test has always measured.
-        searcher = retrieval.HybridSearcher(indexing.open_table(Path(tmp), "smoke_test"),
+        searcher = retrieval.HybridSearcher(indexing.LanceIndex(indexing.open_table(Path(tmp), "smoke_test")),
                                             embeddings.OnnxBgeEmbedding().embed, cutoff=-1.0)
         yield lambda query: searcher.vector(query)[:3]
 
