@@ -3,6 +3,11 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.3.5 (2026-11-24)
+
+- **Clearer skill name:** the skill that answers course questions is now `answering-course-questions` (was `ask`).
+  It triggers the same way; you don't need to call it by name.
+
 ## 0.3.4 (2026-11-24)
 
 - **Clickable course listings:** "What quizzes are there?" and other full lists now link each item to its page on
