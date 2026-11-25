@@ -36,7 +36,8 @@ Then run:
 Setup downloads what it needs the first time (about 215 MB, and about 500 MB on disk once installed: the search
 model and its runtime, the document readers, and Python), lets you pick your courses and indexes them. Then ask away: "What's due this week?", "What does the syllabus say about late work?"
 
-Works on macOS and Linux. Windows isn't supported yet.
+Works on macOS, Linux and Windows. On Windows, install [Git for Windows](https://git-scm.com/downloads/win) first: Claude Code
+uses its shell to start the plugin (and for its own Bash tool).
 
 ## Privacy
 

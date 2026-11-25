@@ -31,3 +31,72 @@ jobs:
         # Empty home and a PATH without the uv that setup-uv installed: the
         # launcher must fetch uv itself, check its SHA-256 and run the server.
         run: env -i HOME="$(mktemp -d)" PATH=/usr/bin:/bin LANG=C.UTF-8 plugin/scripts/server --version
+
+  # Python side on native Windows (#37): the tests, and the server starting
+  # from the same constraints a student installs.
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.9.28"
+          enable-cache: true
+      - name: Cache the embedding model
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: bge-small-5c38ec7c
+      - name: Install Tesseract (OCR fallback)
+        shell: pwsh
+        run: |
+          choco install tesseract -y --no-progress
+          echo "C:\Program Files\Tesseract-OCR" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - run: uv sync
+      - run: uv run pytest -q -p no:cacheprovider
+      - name: The plugin's server builds and starts
+        shell: bash
+        run: plugin/scripts/server --version
+      - name: Without uv, the plugin downloads and verifies it, then starts
+        # Git Bash with a PATH that has no uv: the launcher must fetch the
+        # Windows build, check its SHA-256, unpack it and run the server.
+        shell: bash
+        run: |
+          export PATH=/usr/bin:/bin:/c/Windows/System32:/c/Windows/System32/WindowsPowerShell/v1.0
+          ! command -v uvx
+          HOME="$(mktemp -d)" CLAUDE_PLUGIN_DATA="$(mktemp -d)" plugin/scripts/server --version
+
+  # The student's path on native Windows (#37): install the plugin from this
+  # repo's marketplace with Claude Code itself, then let Claude Code start its
+  # MCP server. Claude Code runs the sh launcher through Git for Windows (the
+  # runner has it; tested without it, every way of starting the server fails,
+  # so the README asks for Git for Windows).
+  windows-claude-code:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Claude Code
+        shell: pwsh
+        run: |
+          irm https://claude.ai/install.ps1 | iex
+          echo "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Install the server the way /canvas-study:setup does (step 1)
+        # The first start downloads uv, Python and the packages (~30 s here),
+        # longer than Claude Code waits for a server to connect; setup runs
+        # this first and then asks the student to reconnect.
+        shell: bash
+        run: |
+          export CLAUDE_PLUGIN_DATA="$(cygpath -m "$USERPROFILE")/.claude/plugins/data/canvas-study-canvas-study"
+          ! command -v uvx
+          plugin/scripts/server --version
+      - name: Install the plugin and check that Claude Code connects to its server
+        shell: pwsh
+        run: |
+          claude --version
+          claude plugin marketplace add "$env:GITHUB_WORKSPACE"
+          claude plugin install canvas-study@canvas-study
+          $out = claude mcp list | Out-String
+          Write-Output $out
+          if ($out -notmatch 'plugin:canvas-study:courses:.*Connected') {
+            throw "Claude Code could not start the plugin's server"
+          }

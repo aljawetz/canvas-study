@@ -46,6 +46,7 @@ def retriever():
         searcher = retrieval.HybridSearcher(store.CourseIndex(Path(tmp) / "index.db", "smoke_test"),
                                             embeddings.OnnxBgeEmbedding().embed, cutoff=-1.0)
         yield lambda query: searcher.vector(query)[:3]
+        searcher._index.close()  # Windows can't delete the folder while index.db is open
 
 
 def _hit_rank(results, source, expected_pages):

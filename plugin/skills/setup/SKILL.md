@@ -20,7 +20,9 @@ Run this with Bash (timeout 600000):
 The first time, it downloads the server's packages and Python (about 85 MB) and the search model (about 130 MB), and
 `uv` if the computer has none, so tell the student it can take a minute or two on a good connection, longer on a
 slow one, and uses about 500 MB of disk. Later runs finish in seconds. If it
-fails, show the last few lines of its output and stop; a network error usually means trying again later.
+fails, show the last few lines of its output and stop; a network error usually means trying again later. On
+Windows, if Bash itself isn't available, the student needs Git for Windows (https://git-scm.com/downloads/win):
+Claude Code uses its shell to run the server. Ask them to install it, restart Claude Code and run setup again.
 
 ## 2. Make sure the tools are connected
 

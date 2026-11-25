@@ -3,9 +3,11 @@ progress through a status file every session can read, and never run twice
 at once for one course."""
 
 import json
+import os
 import subprocess
 import sys
 import threading
+from pathlib import Path
 
 import pytest
 
@@ -103,10 +105,13 @@ def test_a_second_start_while_running_does_not_start_another(tmp_path):
 def test_another_process_holding_the_lock_blocks_a_start(tmp_path):
     lock = tmp_path / "courses" / str(COURSE) / sync_jobs.LOCK_FILE
     lock.parent.mkdir(parents=True)
+    # The holder takes the lock with sync_jobs' own code: fcntl on macOS and
+    # Linux, msvcrt on Windows, so this checks the lock between processes on each.
     holder = subprocess.Popen(
         [sys.executable, "-c",
-         f"import fcntl,sys,time; f=open({str(lock)!r},'a+'); fcntl.flock(f, fcntl.LOCK_EX); print('locked', flush=True); time.sleep(30)"],
-        stdout=subprocess.PIPE, text=True,
+         f"import time; from pathlib import Path; import sync_jobs; held = sync_jobs._Lock(Path({str(lock)!r})); assert held.acquire(); "
+         "print('locked', flush=True); time.sleep(30)"],
+        stdout=subprocess.PIPE, text=True, env={**os.environ, "PYTHONPATH": str(Path(sync_jobs.__file__).parent)},
     )
     try:
         assert holder.stdout.readline().strip() == "locked"

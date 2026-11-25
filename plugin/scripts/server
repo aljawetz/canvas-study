@@ -1,5 +1,6 @@
 #!/bin/sh
-# Starts the Canvas Study MCP server (plugin/server, run by uvx). A student
+# Starts the Canvas Study MCP server (plugin/server, run by uvx). On Windows
+# it runs under Git for Windows' sh, which Claude Code uses to start it (#37). A student
 # installs nothing by hand: when this machine has no uv, the pinned uv release
 # is downloaded from GitHub, checked against its SHA-256 below and unpacked
 # into the plugin's data folder, without touching PATH or shell profiles.
@@ -16,7 +17,8 @@ DATA="${CLAUDE_PLUGIN_DATA:-$HOME/.canvas-study}"
 UV_DIR="$DATA/uv"
 
 find_uvx() {
-  for candidate in "$(command -v uvx 2>/dev/null || true)" "$HOME/.local/bin/uvx" "$HOME/.cargo/bin/uvx" "$UV_DIR/uvx"; do
+  for candidate in "$(command -v uvx 2>/dev/null || true)" "$HOME/.local/bin/uvx" "$HOME/.cargo/bin/uvx" "$UV_DIR/uvx" \
+      "$UV_DIR/uvx.exe"; do
     if [ -n "$candidate" ] && [ -x "$candidate" ]; then
       echo "$candidate"
       return 0
@@ -33,6 +35,8 @@ uv_target_and_sha() {
     Darwin-x86_64) echo "x86_64-apple-darwin 3a8030881d13b824e5168f5e4d060e715e40753249766bda3d52d6771d93b169" ;;
     Linux-x86_64) echo "x86_64-unknown-linux-gnu 66ad1822dd9cf96694b95c24f25bc05cff417a65351464da01682a91796d1f2b" ;;
     Linux-aarch64 | Linux-arm64) echo "aarch64-unknown-linux-gnu 382c342735ff29f8ba4574d88e39bca798bcbac50bff6742710ca9cd8143e7d2" ;;
+    MINGW*-x86_64 | MSYS*-x86_64 | CYGWIN*-x86_64) echo "x86_64-pc-windows-msvc 9cb567fcd92f31431220ce620787043b946c30b9bb46ca213780e5ef471453be" ;;
+    MINGW*-aarch64 | MSYS*-aarch64 | CYGWIN*-aarch64) echo "aarch64-pc-windows-msvc 081703fa19ae05a49f486f97468f7792e1cdacda403a091b151af7f5bd6f4595" ;;
     *) return 1 ;;
   esac
 }
@@ -51,22 +55,31 @@ install_uv() {
   echo "canvas-study: installing uv $UV_VERSION into $UV_DIR" >&2
   tmp="$(mktemp -d)"
   trap 'rm -rf "$tmp"' EXIT
-  curl -LsSf "https://github.com/astral-sh/uv/releases/download/$UV_VERSION/uv-$target.tar.gz" -o "$tmp/uv.tar.gz"
-  actual="$(sha256_of "$tmp/uv.tar.gz")"
+  case "$target" in *windows*) archive=zip ;; *) archive=tar.gz ;; esac
+  curl -LsSf "https://github.com/astral-sh/uv/releases/download/$UV_VERSION/uv-$target.$archive" -o "$tmp/uv.$archive"
+  actual="$(sha256_of "$tmp/uv.$archive")"
   if [ "$actual" != "$expected" ]; then
     echo "canvas-study: the uv download failed its checksum (expected $expected, got $actual); not installing it" >&2
     exit 1
   fi
-  tar -xzf "$tmp/uv.tar.gz" -C "$tmp"
   mkdir -p "$UV_DIR"
-  mv "$tmp/uv-$target/uv" "$tmp/uv-$target/uvx" "$UV_DIR/"
+  if [ "$archive" = zip ]; then
+    # Windows: uv.exe and uvx.exe at the zip's root. Git for Windows' tar can't
+    # read zips, so PowerShell unpacks it.
+    powershell.exe -NoProfile -NonInteractive -Command \
+      "Expand-Archive -Force -LiteralPath '$(cygpath -w "$tmp/uv.zip")' -DestinationPath '$(cygpath -w "$tmp/uv")'"
+    mv "$tmp/uv/uv.exe" "$tmp/uv/uvx.exe" "$UV_DIR/"
+  else
+    tar -xzf "$tmp/uv.tar.gz" -C "$tmp"
+    mv "$tmp/uv-$target/uv" "$tmp/uv-$target/uvx" "$UV_DIR/"
+  fi
   rm -rf "$tmp"
   trap - EXIT
 }
 
 if ! UVX="$(find_uvx)"; then
   install_uv
-  UVX="$UV_DIR/uvx"
+  UVX="$(find_uvx)"
 fi
 
 # Exact versions from uv.lock (server/constraints.txt): uvx ignores lockfiles,
