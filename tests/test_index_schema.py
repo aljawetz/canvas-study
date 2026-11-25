@@ -1,18 +1,17 @@
-"""Course tables hold every material type in any order — TABLE_SCHEMA
-(indexing.py).
+"""Course tables hold every material type in any order.
 
-Guards the real failure where LanceDB inferred column types from a table's
-first batch: a course whose first batch had no page numbers rejected every
-PDF ("cannot cast field 'page' from Int64 to Null"), and a PDF-first course
-rejected pptx slides.
+Guards a real failure from the LanceDB days, when column types were inferred
+from a table's first batch: a course whose first batch had no page numbers
+rejected every PDF, and a PDF-first course rejected pptx slides. The SQLite
+table (store.py) declares its columns, and this keeps it that way.
 """
 
 from pathlib import Path
 
-import lancedb
 import pytest
 
 import indexing
+import store
 
 
 TABLE = "course_1"
@@ -35,8 +34,11 @@ def _unit(text):
 
 
 def _anchors(db_path: Path) -> dict[str, tuple]:
-    df = lancedb.connect(str(db_path)).open_table(TABLE).to_pandas()
-    return {m["item_type"] + ":" + m["source"]: (m["page"], m["slide"]) for m in df["metadata"]}
+    conn = store.connect(db_path)
+    rows = store.rows(conn, TABLE)
+    conn.close()
+    return {r["metadata"]["item_type"] + ":" + r["metadata"]["source"]: (r["metadata"]["page"], r["metadata"]["slide"])
+            for r in rows}
 
 
 
@@ -51,12 +53,11 @@ def _anchors(db_path: Path) -> dict[str, tuple]:
 def test_any_material_order_indexes_into_one_course(tmp_path, order):
     makers = {"page": _page, "pdf": _pdf, "slides": _slides}
     for kind in order:
-        indexing.add_nodes(makers[kind](), tmp_path, TABLE, embed=_unit)
+        indexing.add_nodes(makers[kind](), tmp_path / "index.db", TABLE, embed=_unit)
 
-    assert _anchors(tmp_path) == {
+    assert _anchors(tmp_path / "index.db") == {
         "syllabus:Syllabus": (None, None),
         "file:BVA.pdf": (3, None),
         "file:deck.pptx": (None, 2),
     }
-    assert lancedb.connect(str(tmp_path)).open_table(TABLE).schema == indexing.TABLE_SCHEMA
 

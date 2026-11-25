@@ -1,9 +1,8 @@
 """retrieval.py: rank fusion and the hybrid search around it. No index, no
-network: a stand-in LanceDB table, so only the search logic is tested."""
+network: a stand-in index, so only the search logic is tested."""
 
 import pytest
 
-import indexing
 import retrieval
 from retrieval import Hit, HybridSearcher, reciprocal_rank_fusion
 
@@ -51,38 +50,26 @@ def _row(hit_id, **extra):
             "metadata": {"source": f"{hit_id}.pdf", "page": 1, "item_type": "file", "_node_content": "{}"}, **extra}
 
 
-class _Query:
-    def __init__(self, table, kind, rows):
-        self._table, self._kind, self._rows = table, kind, rows
-
-    def distance_type(self, name):
-        self._table.distance = name
-        return self
-
-    def limit(self, n):
-        self._table.limits[self._kind] = n
-        return self
-
-    def to_list(self):
-        return list(self._rows)
-
-
-class _Table:
-    """Answers vector searches with rows carrying _distance, full-text ones with _score."""
+class _Index:
+    """Answers HybridSearcher's two searches from fixed rows: a vector row's
+    similarity is 1 - its _distance, a keyword row's score its _score."""
 
     def __init__(self, vector_rows, fts_rows):
         self._vector, self._fts = vector_rows, fts_rows
-        self.limits, self.distance = {}, None
+        self.limits = {}
 
-    def search(self, query, query_type=None, vector_column_name=None):
-        if query_type == "fts":
-            return _Query(self, "fts", self._fts)
-        assert isinstance(query, list) and vector_column_name == "vector"
-        return _Query(self, "vector", self._vector)
+    def vector(self, query_vector, limit):
+        assert isinstance(query_vector, list)
+        self.limits["vector"] = limit
+        return [(r, 1.0 - r["_distance"]) for r in self._vector][:limit]
+
+    def keyword(self, query, limit):
+        self.limits["fts"] = limit
+        return [(r, r["_score"]) for r in self._fts][:limit]
 
 
 def _searcher(vector_rows, fts_rows, cutoff=0.0):
-    return HybridSearcher(indexing.LanceIndex(_Table(vector_rows, fts_rows)), embed=lambda q: [0.1, 0.2], cutoff=cutoff)
+    return HybridSearcher(_Index(vector_rows, fts_rows), embed=lambda q: [0.1, 0.2], cutoff=cutoff)
 
 
 def test_vector_scores_are_cosine_similarity_and_the_cutoff_drops_weak_hits():
@@ -90,7 +77,6 @@ def test_vector_scores_are_cosine_similarity_and_the_cutoff_drops_weak_hits():
     hits = s.vector("q")
     assert _ids(hits) == ["near"]
     assert hits[0].score == pytest.approx(0.8)
-    assert s._index._table.distance == "cosine"
 
 
 def test_the_cutoff_is_the_old_exp_l2_threshold_in_cosine_terms():
@@ -110,7 +96,7 @@ def test_keyword_only_hit_surfaces_with_its_own_score():
 def test_search_fetches_more_candidates_and_dedupes():
     s = _searcher([_row("a", _distance=0.1), _row("b", _distance=0.2)], [_row("b", _score=3.0), _row("c", _score=2.0)])
     assert _ids(s.search("q")) == ["b", "a", "c"]
-    assert s._index._table.limits == {"vector": retrieval.VECTOR_CANDIDATES, "fts": retrieval.FTS_TOP_K}
+    assert s._index.limits == {"vector": retrieval.VECTOR_CANDIDATES, "fts": retrieval.FTS_TOP_K}
 
 
 def test_hits_carry_text_citation_fields_and_no_internal_metadata():

@@ -6,6 +6,8 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
+
 import session_note
 
 HOOK = Path(__file__).resolve().parent.parent / "plugin" / "scripts" / "session-start"
@@ -42,8 +44,9 @@ def test_no_known_name_means_no_note(tmp_path):
     assert not (tmp_path / session_note.NOTE_FILE).exists()
 
 
-def test_the_hook_prints_the_note_once_a_course_is_indexed(tmp_path):
-    (tmp_path / "index.lancedb").mkdir()
+@pytest.mark.parametrize("index", ["index.db", "index.lancedb"])  # 0.3.5's index counts until it is rebuilt
+def test_the_hook_prints_the_note_once_a_course_is_indexed(tmp_path, index):
+    (tmp_path / index).mkdir() if index.endswith("lancedb") else (tmp_path / index).touch()
     session_note.remember_names(tmp_path, {1: "Software Testing \"ST\""})  # quotes must stay valid JSON
     session_note.write_note(tmp_path, [1])
 
@@ -52,7 +55,7 @@ def test_the_hook_prints_the_note_once_a_course_is_indexed(tmp_path):
 
 
 def test_the_hook_says_nothing_when_indexed_but_without_a_note(tmp_path):
-    (tmp_path / "index.lancedb").mkdir()
+    (tmp_path / "index.db").touch()
     assert _hook(tmp_path) == ""
 
 

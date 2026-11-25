@@ -1,5 +1,5 @@
 """Search for search_course_material: vector search and BM25 full-text
-search over one course's LanceDB table, merged by rank, plus citations.
+search over one course's index (store.py), merged by rank, plus citations.
 Claude Code writes the answer; nothing here calls a language model.
 
 Why two searches: vector search finds concepts ("what is a test double")
@@ -72,7 +72,7 @@ class HybridSearcher:
     """Search over one course's index. embed turns a query into a unit-length
     vector. The index answers vector(query_vector, limit) with (row, cosine
     similarity) pairs and keyword(query, limit) with (row, BM25 score) pairs,
-    best first: store.CourseIndex, or indexing.LanceIndex."""
+    best first (store.CourseIndex)."""
 
     def __init__(self, index, embed, top_k: int = 5, cutoff: float = SIMILARITY_CUTOFF):
         self._index = index

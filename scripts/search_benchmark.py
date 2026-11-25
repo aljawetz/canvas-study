@@ -24,11 +24,11 @@ K = 10
 
 def searchers(home: Path, course_id: int):
     """mode -> query -> ranked citation labels, all on one table, with the server's own search."""
-    import indexing
     import mcp_server
     import retrieval
+    import store
 
-    searcher = mcp_server.make_searcher(indexing.open_table(home / "index.lancedb", f"course_{course_id}"),
+    searcher = mcp_server.make_searcher(store.CourseIndex(home / "index.db", f"course_{course_id}"),
                                         mcp_server._query_embedder())
 
     def labels(hits):

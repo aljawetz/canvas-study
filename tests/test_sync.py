@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 import indexing
+import store
 import sync
 
 
@@ -49,14 +50,22 @@ def test_diff_item_types_are_independent(conn):
     assert result["new"] == ["1"]  # "1" is new for item_type "file", unrelated to the page row
 
 
+def _rows(db_path):
+    conn = store.connect(db_path)
+    try:
+        return store.rows(conn, "course")
+    finally:
+        conn.close()
+
+
 def test_changed_and_deleted_items_end_to_end(tmp_path):
     """The plan's actual test: simulate a changed item and a deleted item,
-    confirm both the manifest and the LanceDB table end up correct —
+    confirm both the manifest and the index end up correct —
     specifically that delete_ref_doc_nodes removed exactly the right chunks."""
     conn = sync.open_manifest(tmp_path / "manifest.db")
 
     with tempfile.TemporaryDirectory() as db_dir:
-        db_path = Path(db_dir)
+        db_path = Path(db_dir) / "index.db"
 
         # Initial sync: two items already indexed and recorded.
         old_a_pages = [{"page": 1, "text": "Original content about topic A. " * 20}]
@@ -68,8 +77,7 @@ def test_changed_and_deleted_items_end_to_end(tmp_path):
         sync.mark_synced(conn, "item_a", "page", "Doc A", "2026-01-01", sync.content_hash(old_a_pages[0]["text"]))
         sync.mark_synced(conn, "item_b", "page", "Doc B", "2026-01-01", sync.content_hash(old_b_pages[0]["text"]))
 
-        table = indexing.open_table(db_path, "course")
-        assert table.count_rows() == 2
+        assert len(_rows(db_path)) == 2
 
         # New sync: item_a's remote updated_at moved forward (changed),
         # item_b is gone from the remote listing entirely (deleted).
@@ -88,14 +96,13 @@ def test_changed_and_deleted_items_end_to_end(tmp_path):
         indexing.delete_ref_doc_nodes(db_path, "course", "item_b")
         sync.forget(conn, "item_b", "page")
 
-        # LanceDB table: item_b's row is gone entirely, item_a has exactly
-        # one row with the *new* content, not the old one duplicated. Opened
-        # again: a LanceDB handle keeps reading the version it was opened at.
-        df = indexing.open_table(db_path, "course").to_pandas()
-        assert set(df["doc_id"]) == {"item_a"}
-        assert len(df) == 1
-        assert "Updated content" in df.iloc[0]["text"]
-        assert "Original content" not in df.iloc[0]["text"]
+        # Index: item_b's row is gone entirely, item_a has exactly one row
+        # with the *new* content, not the old one duplicated.
+        rows = _rows(db_path)
+        assert {r["doc_id"] for r in rows} == {"item_a"}
+        assert len(rows) == 1
+        assert "Updated content" in rows[0]["text"]
+        assert "Original content" not in rows[0]["text"]
 
         # manifest.db: item_b's row is gone, item_a reflects the new sync.
         remaining = conn.execute("SELECT canvas_item_id FROM manifest").fetchall()
