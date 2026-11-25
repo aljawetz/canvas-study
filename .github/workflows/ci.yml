@@ -52,3 +52,30 @@ jobs:
       - name: The plugin's server builds and starts
         shell: pwsh
         run: uvx --python 3.13 --constraints plugin/server/constraints.txt --from ./plugin/server canvas-study-mcp --version
+
+  # Experiment for #37: how Claude Code on native Windows starts a stdio MCP
+  # server whose command is a POSIX sh script. `claude mcp list` health-checks
+  # each server; nothing here needs a login.
+  windows-claude-mcp:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.9.28"
+      - name: Install Claude Code
+        shell: pwsh
+        run: |
+          irm https://claude.ai/install.ps1 | iex
+          echo "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Register the server three ways and health-check them
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $script = "$env:GITHUB_WORKSPACE/plugin/scripts/server" -replace '\\', '/'
+          claude --version
+          claude mcp add --scope user direct -- "$script"
+          claude mcp add --scope user viash -- sh "$script"
+          claude mcp add --scope user viabash -- bash "$script"
+          claude mcp list
+          Get-Command sh, bash -ErrorAction SilentlyContinue | Format-Table Name, Source
