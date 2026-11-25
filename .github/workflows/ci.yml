@@ -87,4 +87,10 @@ jobs:
           claude plugin install canvas-study@canvas-study
           $out = claude mcp list | Out-String
           Write-Output $out
-          if ($out -notmatch 'plugin:canvas-study:courses:.*Connected') { throw "Claude Code could not start the plugin's server" }
+          if ($out -notmatch 'plugin:canvas-study:courses:.*Connected') {
+            # Claude Code keeps each MCP server's stderr in mcp-logs-* folders.
+            Get-ChildItem -Path $env:USERPROFILE, $env:LOCALAPPDATA -Recurse -Filter *.txt -ErrorAction SilentlyContinue |
+              Where-Object { $_.FullName -match 'mcp-logs-plugin-canvas' } |
+              ForEach-Object { Write-Output "== $($_.FullName)"; Get-Content $_.FullName -Tail 60 }
+            throw "Claude Code could not start the plugin's server"
+          }
