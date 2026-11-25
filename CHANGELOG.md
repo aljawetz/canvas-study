@@ -3,6 +3,12 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.4.2 (2026-11-25)
+
+- **Simpler code, same behavior:** the leftovers of the LanceDB and llama-index days are gone, and course syncing
+  runs one loop for every kind of Canvas item instead of six copies (#58, #59). Nothing changes for you; a sync of
+  three real courses gives the same index, item for item.
+
 ## 0.4.1 (2026-11-25)
 
 - **Windows:** Canvas Study now works on Windows, with Git for Windows installed (Claude Code uses its shell to start

@@ -11,9 +11,8 @@ import re
 import sys
 import tempfile
 from datetime import datetime, tzinfo
+from functools import partial
 from pathlib import Path
-
-import httpx
 
 import canvas
 import citation_links
@@ -39,22 +38,30 @@ def _course_paths(sm_home: Path, course_id: int) -> tuple[Path, Path]:
     return course_dir / "manifest.db", sm_home / "index.db"
 
 
-def _sync_deleted(conn, db_path, table_name, item_type, deleted_ids):
-    for prefixed_id in deleted_ids:
-        indexing.delete_ref_doc_nodes(db_path, table_name, prefixed_id)
-        sync.forget(conn, prefixed_id, item_type)
-        yield {"item": prefixed_id, "status": "done"}
-
-
-def _sync_file(conn, db_path, table_name, file_meta, is_changed):
-    prefixed_id = f"file:{file_meta['id']}"
-    display_name = file_meta.get("display_name", "")
-    updated_at = file_meta.get("updated_at", "")
-    suffix = Path(display_name).suffix.lower()
-
+def _index_item(conn, db_path, table_name, item_type, prefixed_id, is_changed, build):
+    """Index one item: drop its old chunks if it changed, build it, add its
+    chunks and record it in the manifest. build() returns (title, version,
+    chunks, text) and runs after the delete, so a changed page fetches its
+    body only once its old chunks are gone. Returns the title."""
     if is_changed:
         indexing.delete_ref_doc_nodes(db_path, table_name, prefixed_id)
+    title, version, nodes, text = build()
+    indexing.add_nodes(nodes, db_path, table_name)
+    sync.mark_synced(conn, prefixed_id, item_type, title, version, sync.content_hash(text))
+    return title
 
+
+def _sections_doc(prefixed_id, item_type, title, version, sections, node_title=None):
+    """(title, version, chunks, text) for Canvas HTML read as sections. Each
+    type keeps its own item_type: retrieval.py reads it back as the source
+    type, and citation_links.py builds the Canvas URL from it."""
+    nodes = indexing.sections_to_nodes(sections, title, prefixed_id, item_type=item_type, title=node_title)
+    return title, version, nodes, ingestion.sections_text(sections)
+
+
+def _file_doc(prefixed_id, file_meta):
+    display_name = file_meta.get("display_name", "")
+    suffix = Path(display_name).suffix.lower()
     raw = canvas.download(file_meta["url"])
     fd, tmp_name = tempfile.mkstemp(suffix=suffix)
     tmp_path = Path(tmp_name)
@@ -78,38 +85,29 @@ def _sync_file(conn, db_path, table_name, file_meta, is_changed):
             full_text = ingestion.sections_text(sections)
     finally:
         tmp_path.unlink()
-
     nodes = indexing.mark_syllabus_file(nodes, display_name)
-    if nodes:
-        indexing.add_nodes(nodes, db_path, table_name)
-    sync.mark_synced(conn, prefixed_id, "file", display_name, updated_at, sync.content_hash(full_text))
-    return display_name
+    return display_name, file_meta.get("updated_at", ""), nodes, full_text
 
 
-def _sync_page(conn, db_path, table_name, course_id, page_summary, is_changed):
-    prefixed_id = f"page:{page_summary['url']}"
-    updated_at = page_summary.get("updated_at", "")
-
-    if is_changed:
-        indexing.delete_ref_doc_nodes(db_path, table_name, prefixed_id)
-
+def _page_doc(course_id, prefixed_id, page):
     # Pages found via Modules or the front page were already fetched in full
-    # (body included) to learn their updated_at; only list_pages summaries,
-    # which never carry a body, need fetching here.
-    full = page_summary if "body" in page_summary else canvas.get_page(course_id, page_summary["url"])
-    title = (full or {}).get("title") or page_summary.get("title") or page_summary["url"]
+    # (body included) to learn their updated_at; only list_pages summaries
+    # whose body couldn't be read earlier need fetching here.
+    full = page if "body" in page else canvas.get_page(course_id, page["url"])
+    title = (full or {}).get("title") or page.get("title") or page["url"]
     sections = ingestion.extract_html_sections((full or {}).get("body") or "")
-    text = ingestion.sections_text(sections)
-    # item_type="page": a Canvas wiki page isn't paginated like a PDF —
-    # retrieval.py's citation formatting reads item_type back as
-    # source_type, so this must say "page", not "file", and carries no
+    # A Canvas wiki page isn't paginated like a PDF: item_type "page", and no
     # fabricated page number.
-    nodes = indexing.sections_to_nodes(sections, title, prefixed_id, item_type="page")
+    return _sections_doc(prefixed_id, "page", title, page.get("updated_at", ""), sections)
 
-    if nodes:
-        indexing.add_nodes(nodes, db_path, table_name)
-    sync.mark_synced(conn, prefixed_id, "page", title, updated_at, sync.content_hash(text))
-    return title
+
+def _syllabus_doc(prefixed_id, syllabus_html):
+    # Own item_type so citation_links.py can open Canvas's syllabus URL
+    # (/assignments/syllabus), which isn't under /pages/. It has no
+    # updated_at: its content hash stands in as the version.
+    sections = ingestion.extract_html_sections(syllabus_html)
+    return _sections_doc(prefixed_id, "syllabus", "Syllabus", sync.content_hash(syllabus_html), sections,
+                         node_title=indexing.SYLLABUS_TITLE)
 
 
 def schedule_line(assignment: dict, tz: tzinfo | None = None) -> str:
@@ -123,7 +121,7 @@ def schedule_line(assignment: dict, tz: tzinfo | None = None) -> str:
     due_at = assignment.get("due_at")
     if due_at:
         try:
-            due = datetime.fromisoformat(due_at.replace("Z", "+00:00")).astimezone(tz)
+            due = datetime.fromisoformat(due_at).astimezone(tz)
             parts.append(f"Due {due.strftime('%a, %b')} {due.day}, {due.year} at {due.strftime('%I:%M %p %Z').lstrip('0')}.")
         except ValueError:
             pass
@@ -133,43 +131,17 @@ def schedule_line(assignment: dict, tz: tzinfo | None = None) -> str:
     return " ".join(parts)
 
 
-def _sync_assignment(conn, db_path, table_name, assignment, is_changed):
-    prefixed_id = f"assignment:{assignment['id']}"
+def _assignment_doc(prefixed_id, assignment):
     name = assignment.get("name") or f"Assignment {assignment['id']}"
-    if is_changed:
-        indexing.delete_ref_doc_nodes(db_path, table_name, prefixed_id)
-
     sections = ingestion.extract_html_sections(assignment.get("description") or "")
     schedule = schedule_line(assignment)
     if schedule:
         sections.insert(0, {"heading": "Due date and points", "text": schedule})
-    text = ingestion.sections_text(sections)
-    # Own item_type: citation_links.py opens /assignments/<id>.
-    nodes = indexing.sections_to_nodes(sections, name, prefixed_id, item_type="assignment")
-    if nodes:
-        indexing.add_nodes(nodes, db_path, table_name)
-    sync.mark_synced(conn, prefixed_id, "assignment", name, assignment.get("updated_at", ""), sync.content_hash(text))
-    return name
+    # citation_links.py opens /assignments/<id>.
+    return _sections_doc(prefixed_id, "assignment", name, assignment.get("updated_at", ""), sections)
 
 
-def _sync_syllabus(conn, db_path, table_name, course_id, syllabus_html, version, is_changed):
-    prefixed_id = f"syllabus:{course_id}"
-    if is_changed:
-        indexing.delete_ref_doc_nodes(db_path, table_name, prefixed_id)
-
-    sections = ingestion.extract_html_sections(syllabus_html)
-    text = ingestion.sections_text(sections)
-    # Own item_type so citation_links.py can open Canvas's syllabus URL
-    # (/assignments/syllabus), which isn't under /pages/.
-    nodes = indexing.sections_to_nodes(sections, "Syllabus", prefixed_id, item_type="syllabus",
-                                       title=indexing.SYLLABUS_TITLE)
-    if nodes:
-        indexing.add_nodes(nodes, db_path, table_name)
-    sync.mark_synced(conn, prefixed_id, "syllabus", "Syllabus", version, sync.content_hash(text))
-    return "Syllabus"
-
-
-def _deletable(remote_items: list[dict], deleted_ids: list[str], unresolved_ids: set[str]) -> list[str]:
+def _deletable(remote_items: list[dict], deleted_ids: list[str], unresolved_ids) -> list[str]:
     """Which of diff()'s "deleted" ids are safe to actually destroy.
 
     canvas.py's HTTP layer degrades a 403/404 to None / an empty list
@@ -177,9 +149,8 @@ def _deletable(remote_items: list[dict], deleted_ids: list[str], unresolved_ids:
     indistinguishable from "this course genuinely has zero items" or
     "this item is genuinely gone". Absence from a listing is therefore
     *not* trustworthy evidence of deletion, and acting on it can silently
-    destroy a course's whole indexed corpus — expensive to rebuild, and
-    with no manual re-sync UI in this phase, unrecoverable until a much
-    later one. So two guards:
+    destroy a course's whole indexed corpus, which is slow to rebuild. So
+    two guards:
 
       - an entirely empty remote listing deletes nothing (highest-risk,
         least distinguishable case — a hidden/locked modules tab looks
@@ -230,29 +201,21 @@ def _posted_line(topic: dict, tz: tzinfo | None = None) -> str:
     if not when:
         return ""
     try:
-        posted = datetime.fromisoformat(when.replace("Z", "+00:00")).astimezone(tz)
+        posted = datetime.fromisoformat(when).astimezone(tz)
     except ValueError:
         return ""
     return f"Posted {posted.strftime('%a, %b')} {posted.day}, {posted.year}."
 
 
-def _sync_topic(conn, db_path, table_name, topic, kind, is_changed):
+def _topic_doc(kind, prefixed_id, topic):
     """An announcement or a discussion's opening post (not the replies)."""
-    prefixed_id = f"{kind}:{topic['id']}"
     title = (topic.get("title") or "").strip() or f"{kind.title()} {topic['id']}"
-    if is_changed:
-        indexing.delete_ref_doc_nodes(db_path, table_name, prefixed_id)
     sections = ingestion.extract_html_sections(topic.get("message") or "")
     posted = _posted_line(topic) if kind == "announcement" else ""
     if posted:
         sections.insert(0, {"heading": "Posted", "text": posted})
-    text = ingestion.sections_text(sections)
-    # Own item_type: citation_links.py opens /discussion_topics/<id> for both.
-    nodes = indexing.sections_to_nodes(sections, title, prefixed_id, item_type=kind)
-    if nodes:
-        indexing.add_nodes(nodes, db_path, table_name)
-    sync.mark_synced(conn, prefixed_id, kind, title, _topic_version(topic), sync.content_hash(text))
-    return title
+    # citation_links.py opens /discussion_topics/<id> for both kinds.
+    return _sections_doc(prefixed_id, kind, title, _topic_version(topic), sections)
 
 
 QUIZ_TYPES = {
@@ -296,19 +259,10 @@ def _quiz_version(quiz: dict) -> str:
     return sync.content_hash(f"{quiz.get('title') or ''}\n{ingestion.sections_text(_quiz_sections(quiz))}")
 
 
-def _sync_quiz(conn, db_path, table_name, quiz, is_changed):
+def _quiz_doc(prefixed_id, quiz):
     """A quiz's instructions and settings. Never its questions."""
-    prefixed_id = f"quiz:{quiz['id']}"
     title = (quiz.get("title") or "").strip() or f"Quiz {quiz['id']}"
-    if is_changed:
-        indexing.delete_ref_doc_nodes(db_path, table_name, prefixed_id)
-    sections = _quiz_sections(quiz)
-    text = ingestion.sections_text(sections)
-    nodes = indexing.sections_to_nodes(sections, title, prefixed_id, item_type="quiz")
-    if nodes:
-        indexing.add_nodes(nodes, db_path, table_name)
-    sync.mark_synced(conn, prefixed_id, "quiz", title, _quiz_version(quiz), sync.content_hash(text))
-    return title
+    return _sections_doc(prefixed_id, "quiz", title, _quiz_version(quiz), _quiz_sections(quiz))
 
 
 def sync_course(course_id: int, sm_home: Path):
@@ -338,7 +292,7 @@ def sync_course(course_id: int, sm_home: Path):
         announcements = canvas.list_announcements(course_id)
         discussions = canvas.list_discussions(course_id)
         quizzes = canvas.list_quizzes(course_id)
-    except (canvas.CanvasError, httpx.HTTPStatusError, httpx.TransportError) as e:
+    except canvas.ERRORS as e:
         yield {"done": True, "error": str(e)}
         return
 
@@ -353,7 +307,7 @@ def sync_course(course_id: int, sm_home: Path):
 
 
 def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, front_page, syllabus_html,
-                assignments, files_tab, announcements, discussions, quizzes=()):
+                assignments, files_tab, announcements, discussions, quizzes):
     """The rest of sync_course, once Canvas has answered: diff against the
     manifest, then index, update and delete item by item. Split out so
     sync_course can close the manifest whichever way this ends."""
@@ -362,9 +316,9 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
     new_count = changed_count = removed_count = failed_count = 0
 
     # Coarse safety net over the fine-grained per-item try/excepts below
-    # (which still isolate one file/page's failure from the rest). Its only
-    # job is the "exactly one terminal event, always" guarantee above —
-    # sync.diff() and _sync_deleted()'s index/manifest writes are otherwise
+    # (which still isolate one item's failure from the rest). Its only job
+    # is the "exactly one terminal event, always" guarantee above:
+    # sync.diff() and the deletions' index/manifest writes are otherwise
     # unguarded, and an exception from either would escape uncaught.
     try:
         # Pages come from three places, merged by url slug. list_pages is
@@ -372,7 +326,7 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
         # (8 of 10 surveyed) — yet every Page item in those courses' Modules
         # opened fine individually (211 of 211), and five courses had no
         # other content at all. Module items carry no updated_at, so each
-        # one is fetched in full here; the body is kept for _sync_page. A
+        # one is fetched in full here; the body is kept for _page_doc. A
         # fetch that fails or 404s is unresolved, not deleted — same guard
         # as files below.
         pages_by_url = {p["url"]: p for p in pages_list}
@@ -471,7 +425,7 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
         wanted_ids += [fid for links in page_links.values() for fid in links]
         wanted_ids += [fid for html in other_html for fid in _linked_file_ids(html, course_id)]
         # A module File item with no content_id can't be looked up: counted
-        # as failed, as before.
+        # as failed.
         for item in module_items:
             if item.get("type") == "File" and item.get("content_id") is None:
                 failed_count += 1
@@ -496,9 +450,9 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
                     yield {"item": fid, "status": "failed", "error": str(e)}
                     continue
             if meta is None:
-                # get_file degraded a 403/404 to None — skip indexing it as
-                # before, but record it as unresolved so its absence from
-                # file_remote isn't mistaken for "deleted from Canvas".
+                # get_file degraded a 403/404 to None: not indexed, and
+                # recorded as unresolved so its absence from file_remote
+                # isn't mistaken for "deleted from Canvas".
                 unresolved_file_ids.add(prefixed_id)
                 continue
             display_name = meta.get("display_name", "")
@@ -545,114 +499,54 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
         if outline:
             course_items.save_outline(conn, outline)
 
+        # One row per item type: (type, remote listing, items by unprefixed
+        # id, build(prefixed_id, item), label(item, key, prefixed_id) for a
+        # failure). Deleted, then indexed, in this order.
+        kinds = [
+            ("file", file_remote, file_metas, _file_doc, lambda m, key, _: m.get("display_name", key)),
+            ("page", page_remote, pages_by_url, partial(_page_doc, course_id), lambda p, key, _: p.get("title", key)),
+            ("syllabus", syllabus_remote, {str(course_id): syllabus_html}, _syllabus_doc, lambda *_: "Syllabus"),
+            ("assignment", assignment_remote, assignments_by_id, _assignment_doc,
+             lambda a, _, pid: a.get("name", pid)),
+            *((kind, topic_remote[kind], topics[kind], partial(_topic_doc, kind),
+               lambda t, _, pid: t.get("title") or pid) for kind in topics),
+            ("quiz", quiz_remote, quizzes_by_id, _quiz_doc, lambda q, _, pid: q.get("title") or pid),
+        ]
+        # Items whose own fetch failed or 404'd this round: never deleted.
+        unresolved = {"file": unresolved_file_ids, "page": unresolved_page_ids}
+
         # A course indexed in an older chunk format is re-indexed item by
         # item (delete, then add), so it stays searchable meanwhile.
         rebuild = sync.index_format(conn) < indexing.INDEX_FORMAT
-        file_diff = sync.diff(conn, "file", file_remote, rebuild)
-        page_diff = sync.diff(conn, "page", page_remote, rebuild)
-        syllabus_diff = sync.diff(conn, "syllabus", syllabus_remote, rebuild)
-        assignment_diff = sync.diff(conn, "assignment", assignment_remote, rebuild)
-        topic_diffs = {kind: sync.diff(conn, kind, remote, rebuild) for kind, remote in topic_remote.items()}
-        quiz_diff = sync.diff(conn, "quiz", quiz_remote, rebuild)
+        diffs = {kind: sync.diff(conn, kind, remote, rebuild) for kind, remote, *_ in kinds}
 
-        file_deleted = _deletable(file_remote, file_diff["deleted"], unresolved_file_ids) if links_complete else []
-        page_deleted = _deletable(page_remote, page_diff["deleted"], unresolved_page_ids)
-        # Like the other empty-listing guards: a syllabus that comes back
-        # empty or 403 is never taken as "removed".
-        syllabus_deleted = _deletable(syllabus_remote, syllabus_diff["deleted"], set())
-        assignment_deleted = _deletable(assignment_remote, assignment_diff["deleted"], set())
-        topic_deleted = {
-            kind: _deletable(topic_remote[kind], topic_diffs[kind]["deleted"], set()) for kind in topic_remote
-        }
-
-        deletions = [
-            ("file", file_deleted),
-            ("page", page_deleted),
-            ("syllabus", syllabus_deleted),
-            ("assignment", assignment_deleted),
-            *topic_deleted.items(),
-            ("quiz", _deletable(quiz_remote, quiz_diff["deleted"], set())),
-        ]
-        for item_type, deleted_ids in deletions:
-            for event in _sync_deleted(conn, db_path, table_name, item_type, deleted_ids):
+        for kind, remote, *_ in kinds:
+            # Like the other empty-listing guards: a syllabus that comes back
+            # empty or 403 is never taken as "removed". A file is only taken
+            # as removed when every page's links could be read.
+            deleted = _deletable(remote, diffs[kind]["deleted"], unresolved.get(kind, ()))
+            if kind == "file" and not links_complete:
+                deleted = []
+            for prefixed_id in deleted:
+                indexing.delete_ref_doc_nodes(db_path, table_name, prefixed_id)
+                sync.forget(conn, prefixed_id, kind)
                 removed_count += 1
-                yield event
+                yield {"item": prefixed_id, "status": "done"}
 
-        for ids, is_changed in ((file_diff["new"], False), (file_diff["changed"], True)):
-            for prefixed_id in ids:
-                fid = prefixed_id.removeprefix("file:")
-                meta = file_metas[fid]
-                try:
-                    name = _sync_file(conn, db_path, table_name, meta, is_changed)
-                    yield {"item": name, "status": "done"}
-                    changed_count += is_changed
-                    new_count += not is_changed
-                except Exception as e:
-                    failed_count += 1
-                    yield {"item": meta.get("display_name", fid), "status": "failed", "error": str(e)}
-
-        for ids, is_changed in ((page_diff["new"], False), (page_diff["changed"], True)):
-            for prefixed_id in ids:
-                url = prefixed_id.removeprefix("page:")
-                page_summary = pages_by_url[url]
-                try:
-                    title = _sync_page(conn, db_path, table_name, course_id, page_summary, is_changed)
-                    yield {"item": title, "status": "done"}
-                    changed_count += is_changed
-                    new_count += not is_changed
-                except Exception as e:
-                    failed_count += 1
-                    yield {"item": page_summary.get("title", url), "status": "failed", "error": str(e)}
-
-        for ids, is_changed in ((syllabus_diff["new"], False), (syllabus_diff["changed"], True)):
-            for _ in ids:
-                try:
-                    name = _sync_syllabus(
-                        conn, db_path, table_name, course_id, syllabus_html, syllabus_remote[0]["updated_at"], is_changed
-                    )
-                    yield {"item": name, "status": "done"}
-                    changed_count += is_changed
-                    new_count += not is_changed
-                except Exception as e:
-                    failed_count += 1
-                    yield {"item": "Syllabus", "status": "failed", "error": str(e)}
-
-        for ids, is_changed in ((assignment_diff["new"], False), (assignment_diff["changed"], True)):
-            for prefixed_id in ids:
-                assignment = assignments_by_id[prefixed_id.removeprefix("assignment:")]
-                try:
-                    name = _sync_assignment(conn, db_path, table_name, assignment, is_changed)
-                    yield {"item": name, "status": "done"}
-                    changed_count += is_changed
-                    new_count += not is_changed
-                except Exception as e:
-                    failed_count += 1
-                    yield {"item": assignment.get("name", prefixed_id), "status": "failed", "error": str(e)}
-
-        for kind, diff in topic_diffs.items():
-            for ids, is_changed in ((diff["new"], False), (diff["changed"], True)):
+        for kind, _, by_id, build, label in kinds:
+            for ids, is_changed in ((diffs[kind]["new"], False), (diffs[kind]["changed"], True)):
                 for prefixed_id in ids:
-                    topic = topics[kind][prefixed_id.removeprefix(f"{kind}:")]
+                    key = prefixed_id.removeprefix(f"{kind}:")
+                    item = by_id[key]
                     try:
-                        name = _sync_topic(conn, db_path, table_name, topic, kind, is_changed)
+                        name = _index_item(conn, db_path, table_name, kind, prefixed_id, is_changed,
+                                           partial(build, prefixed_id, item))
                         yield {"item": name, "status": "done"}
                         changed_count += is_changed
                         new_count += not is_changed
                     except Exception as e:
                         failed_count += 1
-                        yield {"item": topic.get("title") or prefixed_id, "status": "failed", "error": str(e)}
-
-        for ids, is_changed in ((quiz_diff["new"], False), (quiz_diff["changed"], True)):
-            for prefixed_id in ids:
-                quiz = quizzes_by_id[prefixed_id.removeprefix("quiz:")]
-                try:
-                    name = _sync_quiz(conn, db_path, table_name, quiz, is_changed)
-                    yield {"item": name, "status": "done"}
-                    changed_count += is_changed
-                    new_count += not is_changed
-                except Exception as e:
-                    failed_count += 1
-                    yield {"item": quiz.get("title") or prefixed_id, "status": "failed", "error": str(e)}
+                        yield {"item": label(item, key, prefixed_id), "status": "failed", "error": str(e)}
         # Stamped even when single items failed: they are retried like any
         # failed item, and a course with one broken file must not rebuild
         # on every sync. A sync that stops early (above) leaves the stamp,
