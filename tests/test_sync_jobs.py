@@ -109,7 +109,7 @@ def test_another_process_holding_the_lock_blocks_a_start(tmp_path):
     # Linux, msvcrt on Windows, so this checks the lock between processes on each.
     holder = subprocess.Popen(
         [sys.executable, "-c",
-         f"import time; from pathlib import Path; import sync_jobs; assert sync_jobs._Lock(Path({str(lock)!r})).acquire(); "
+         f"import time; from pathlib import Path; import sync_jobs; held = sync_jobs._Lock(Path({str(lock)!r})); assert held.acquire(); "
          "print('locked', flush=True); time.sleep(30)"],
         stdout=subprocess.PIPE, text=True, env={**os.environ, "PYTHONPATH": str(Path(sync_jobs.__file__).parent)},
     )
