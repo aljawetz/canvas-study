@@ -66,38 +66,25 @@ jobs:
           ! command -v uvx
           HOME="$(mktemp -d)" CLAUDE_PLUGIN_DATA="$(mktemp -d)" plugin/scripts/server --version
 
-  # Experiment for #37: how Claude Code on native Windows starts a stdio MCP
-  # server whose command is a POSIX sh script. `claude mcp list` health-checks
-  # each server; nothing here needs a login.
-  windows-claude-mcp:
+  # The student's path on native Windows (#37): install the plugin from this
+  # repo's marketplace with Claude Code itself, then let Claude Code start its
+  # MCP server. Claude Code runs the sh launcher through Git for Windows (the
+  # runner has it; without Git the server can't start, which the README says).
+  windows-claude-code:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
-        with:
-          version: "0.9.28"
       - name: Install Claude Code
         shell: pwsh
         run: |
           irm https://claude.ai/install.ps1 | iex
           echo "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-      - name: Register the server three ways and health-check them
+      - name: Install the plugin and check that Claude Code connects to its server
         shell: pwsh
-        continue-on-error: true
         run: |
-          $script = "$env:GITHUB_WORKSPACE/plugin/scripts/server" -replace '\\', '/'
           claude --version
-          claude mcp add --scope user direct -- "$script"
-          claude mcp add --scope user viash -- sh "$script"
-          claude mcp add --scope user viabash -- bash "$script"
-          claude mcp list
-          Get-Command sh, bash -ErrorAction SilentlyContinue | Format-Table Name, Source
-      - name: Same, on a machine without Git for Windows
-        shell: pwsh
-        continue-on-error: true
-        run: |
-          $script = "$env:GITHUB_WORKSPACE/plugin/scripts/server" -replace '\\', '/'
-          Rename-Item "C:\Program Files\Git" "Git-hidden"
-          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '\\Git\\' }) -join ';'
-          Get-Command sh, bash, git -ErrorAction SilentlyContinue | Format-Table Name, Source
-          claude mcp list
+          claude plugin marketplace add "$env:GITHUB_WORKSPACE"
+          claude plugin install canvas-study@canvas-study
+          $out = claude mcp list | Out-String
+          Write-Output $out
+          if ($out -notmatch 'plugin:canvas-study:courses:.*Connected') { throw "Claude Code could not start the plugin's server" }
