@@ -79,6 +79,16 @@ jobs:
         run: |
           irm https://claude.ai/install.ps1 | iex
           echo "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+      - name: Diagnose (temporary) - start the launcher like Claude Code would
+        shell: bash
+        continue-on-error: true
+        run: |
+          export CLAUDE_PLUGIN_DATA="$(cygpath -m "$USERPROFILE")/.claude/plugins/data/canvas-study-canvas-study"
+          export SM_HOME="$CLAUDE_PLUGIN_DATA" SM_MODELS_DIR="$CLAUDE_PLUGIN_DATA/models" SM_CANVAS_URL= SM_CANVAS_TOKEN=
+          command -v uvx || echo "no uvx on PATH"
+          echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0"}}}' \
+            | plugin/scripts/server 2>&1 | tail -40
+          echo "exit: ${PIPESTATUS[1]}"
       - name: Install the plugin and check that Claude Code connects to its server
         shell: pwsh
         run: |
