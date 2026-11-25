@@ -128,3 +128,31 @@ def test_table_names_and_vector_sizes_are_checked(tmp_path):
         store.create_table(conn, "course_1; DROP TABLE x")
     with pytest.raises(ValueError):
         store.add(conn, "course_1", [_row("file:1", "x", [1.0, 0.0])])
+
+
+def test_a_deleted_chunks_words_never_find_a_later_chunk(tmp_path):
+    """SQLite reuses the rowid of a deleted last row: a keyword entry left
+    behind by a delete would then match whatever chunk is added next."""
+    path = tmp_path / "index.db"
+    conn = store.connect(path)
+    store.add(conn, "course_1", [_row("file:1", "Kanban boards limit work in progress.", _unit((0, 1.0)))])
+    store.delete_doc(conn, "course_1", "file:1")
+    store.add(conn, "course_1", [_row("file:2", "Personas describe target users.", _unit((1, 1.0)))])
+
+    assert store.CourseIndex(path, "course_1").keyword("kanban", limit=5) == []
+
+
+def test_question_words_dont_outrank_the_topic(tmp_path):
+    """"what do I ..." must rank on the topic, not on a chunk full of "what",
+    "do" and "I" (LanceDB dropped those words; #36)."""
+    path = tmp_path / "index.db"
+    conn = store.connect(path)
+    store.add(conn, "course_1", [
+        _row("page:faq", "What do I do if I miss class? What do I tell the TA? I do not know what to do.", _unit((0, 1.0))),
+        _row("file:mock", "A mock verifies the interactions your code has with a collaborator.", _unit((1, 1.0))),
+        *[_row(f"file:f{i}", f"Filler chunk number {i} about requirements.", _unit((2, 1.0))) for i in range(5)],
+    ])
+
+    found = store.CourseIndex(path, "course_1").keyword("what do I mock?", limit=5)
+
+    assert found[0][0]["doc_id"] == "file:mock"
