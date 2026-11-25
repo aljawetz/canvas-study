@@ -3,6 +3,13 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.4.1 (2026-11-25)
+
+- **Windows:** Canvas Study now works on Windows, with Git for Windows installed (Claude Code uses its shell to start
+  the plugin). If the computer has no `uv`, the plugin downloads uv's Windows build and checks it, as on macOS and
+  Linux. Tested on Windows in CI: the tests, the server starting with and without uv, and Claude Code installing the
+  plugin and connecting to it.
+
 ## 0.4.0 (2026-11-24)
 
 - **Half the install:** search runs on SQLite, which comes with Python, instead of LanceDB and PyArrow. First setup

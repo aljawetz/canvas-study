@@ -17,7 +17,7 @@ then `/plugin install canvas-study@canvas-study`):
 Claude Code then asks for your Canvas URL and a Canvas access token (Canvas > Account >
 Settings > Approved Integrations > **+ New Access Token**). Then run `/canvas-study:setup` and pick your courses.
 
-Works on macOS and Linux.
+Works on macOS, Linux and Windows (on Windows it needs [Git for Windows](https://git-scm.com/downloads/win), which Claude Code also uses).
 
 ## What it runs, sends and fetches
 
