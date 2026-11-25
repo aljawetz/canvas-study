@@ -60,5 +60,6 @@ tqdm==4.70.1
 truststore==0.10.5 ; sys_platform != 'emscripten'
 typing-extensions==4.16.0
 typing-inspection==0.4.5
+tzdata==2026.6 ; sys_platform == 'win32'
 uvicorn==0.54.0 ; sys_platform != 'emscripten'
 xlsxwriter==3.3.1

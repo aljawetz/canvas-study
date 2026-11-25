@@ -18,6 +18,9 @@ dependencies = [
     "python-docx>=1.1",
     "openpyxl>=3.1",
     "pytesseract>=0.3",
+    # zoneinfo reads the system's time zones on macOS and Linux; Windows has
+    # none for it, so ZoneInfo("America/Los_Angeles") needs this package (#37).
+    "tzdata>=2024.1; sys_platform == 'win32'",
 ]
 
 [project.scripts]

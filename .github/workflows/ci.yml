@@ -79,3 +79,12 @@ jobs:
           claude mcp add --scope user viabash -- bash "$script"
           claude mcp list
           Get-Command sh, bash -ErrorAction SilentlyContinue | Format-Table Name, Source
+      - name: Same, on a machine without Git for Windows
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $script = "$env:GITHUB_WORKSPACE/plugin/scripts/server" -replace '\\', '/'
+          Rename-Item "C:\Program Files\Git" "Git-hidden"
+          $env:PATH = ($env:PATH -split ';' | Where-Object { $_ -notmatch '\\Git\\' }) -join ';'
+          Get-Command sh, bash, git -ErrorAction SilentlyContinue | Format-Table Name, Source
+          claude mcp list
