@@ -545,12 +545,15 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
         if outline:
             course_items.save_outline(conn, outline)
 
-        file_diff = sync.diff(conn, "file", file_remote)
-        page_diff = sync.diff(conn, "page", page_remote)
-        syllabus_diff = sync.diff(conn, "syllabus", syllabus_remote)
-        assignment_diff = sync.diff(conn, "assignment", assignment_remote)
-        topic_diffs = {kind: sync.diff(conn, kind, remote) for kind, remote in topic_remote.items()}
-        quiz_diff = sync.diff(conn, "quiz", quiz_remote)
+        # A course indexed in an older chunk format is re-indexed item by
+        # item (delete, then add), so it stays searchable meanwhile.
+        rebuild = sync.index_format(conn) < indexing.INDEX_FORMAT
+        file_diff = sync.diff(conn, "file", file_remote, rebuild)
+        page_diff = sync.diff(conn, "page", page_remote, rebuild)
+        syllabus_diff = sync.diff(conn, "syllabus", syllabus_remote, rebuild)
+        assignment_diff = sync.diff(conn, "assignment", assignment_remote, rebuild)
+        topic_diffs = {kind: sync.diff(conn, kind, remote, rebuild) for kind, remote in topic_remote.items()}
+        quiz_diff = sync.diff(conn, "quiz", quiz_remote, rebuild)
 
         file_deleted = _deletable(file_remote, file_diff["deleted"], unresolved_file_ids) if links_complete else []
         page_deleted = _deletable(page_remote, page_diff["deleted"], unresolved_page_ids)
@@ -650,6 +653,11 @@ def _sync_items(conn, course_id, db_path, table_name, structure, pages_list, fro
                 except Exception as e:
                     failed_count += 1
                     yield {"item": quiz.get("title") or prefixed_id, "status": "failed", "error": str(e)}
+        # Stamped even when single items failed: they are retried like any
+        # failed item, and a course with one broken file must not rebuild
+        # on every sync. A sync that stops early (above) leaves the stamp,
+        # so the next one finishes the rebuild.
+        sync.set_index_format(conn, indexing.INDEX_FORMAT)
     except Exception as e:
         yield {"done": True, "error": str(e)}
         return

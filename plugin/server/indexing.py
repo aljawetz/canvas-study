@@ -33,6 +33,13 @@ from embeddings import EMBEDDING_DIM, MODEL_DIR
 # page's largest chunk had a median of 405 tokens. Splitting to a true 450
 # kept hit@5 but put the right page at #1 less often (search benchmark,
 # 225 questions), so the smaller, more focused chunks stay.
+# What an indexed chunk looks like: its text (splitting, headings like
+# "Course syllabus"), metadata and storage. Bump it in any change to those,
+# so every install's next sync re-indexes each course once in the new format
+# (course_sync, sync.index_format); an incremental sync otherwise only
+# re-indexes what changed on Canvas.
+INDEX_FORMAT = 1
+
 CHUNK_SIZE = 400
 CHUNK_OVERLAP = 60  # ~15%
 

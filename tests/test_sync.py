@@ -101,3 +101,20 @@ def test_changed_and_deleted_items_end_to_end(tmp_path):
         remaining = conn.execute("SELECT canvas_item_id FROM manifest").fetchall()
         assert remaining == [("item_a",)]
         assert sync.get_content_hash(conn, "item_a", "page") == new_hash
+
+
+def test_diff_with_rebuild_counts_every_indexed_item_as_changed(conn):
+    sync.mark_synced(conn, "file:1", "file", "a.pdf", "2026-01-01", "h")
+    sync.mark_synced(conn, "file:2", "file", "b.pdf", "2026-01-01", "h")
+    remote = [{"id": "file:1", "updated_at": "2026-01-01"}, {"id": "file:3", "updated_at": "2026-01-01"}]
+
+    out = sync.diff(conn, "file", remote, rebuild=True)
+
+    assert out == {"new": ["file:3"], "changed": ["file:1"], "deleted": ["file:2"], "unchanged": []}
+
+
+def test_index_format_is_zero_until_stamped(conn):
+    assert sync.index_format(conn) == 0
+    sync.set_index_format(conn, 3)
+    sync.set_index_format(conn, 4)
+    assert sync.index_format(conn) == 4
