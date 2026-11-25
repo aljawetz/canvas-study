@@ -1,5 +1,5 @@
 ---
-name: ask
+name: answering-course-questions
 description: Answer a question about one of the student's courses (deadlines, grades, grading, policies, assignments, quizzes, lecture and reading content) from their own Canvas materials, with citations. Use for any course question or request about their coursework (labs, assignments, exams, including asking for solutions), even without a command.
 ---
 

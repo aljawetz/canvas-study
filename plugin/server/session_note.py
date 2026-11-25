@@ -44,7 +44,7 @@ def note_text(names: list[str]) -> str:
     return (
         f"The student's courses indexed by Canvas Study: {listed}. A question about one of these courses, "
         "including a concept or topic it teaches, is a question about their Canvas course: use the "
-        "canvas-study:ask skill and answer from their course material, not from general knowledge."
+        "canvas-study:answering-course-questions skill and answer from their course material, not from general knowledge."
     )
 
 
