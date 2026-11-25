@@ -3,6 +3,15 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.4.0 (2026-11-24)
+
+- **Half the install:** search runs on SQLite, which comes with Python, instead of LanceDB and PyArrow. First setup
+  downloads about 215 MB instead of 320 MB and takes about 500 MB of disk instead of 800 MB. Searches take a few
+  milliseconds instead of about 35, with the same results on the search benchmark.
+- **Your courses move over on their own:** the first time Claude Code starts with this version, each course is
+  re-indexed in the background (a few minutes). Deadlines, grades and feedback work meanwhile; search says when a
+  course isn't back yet. Later changes to how the index is built rebuild it the same way.
+
 ## 0.3.5 (2026-11-24)
 
 - **Clearer skill name:** the skill that answers course questions is now `answering-course-questions` (was `ask`).

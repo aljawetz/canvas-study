@@ -41,22 +41,20 @@ def _words(text: str) -> set[str]:
 
 
 def load_chunks(home: Path) -> dict[int, list[dict]]:
-    import lancedb
-
     import retrieval
+    import store
 
-    db = lancedb.connect(str(home / "index.lancedb"))
+    conn = store.connect(home / "index.db")
     courses = {}
-    for name in db.list_tables().tables:
+    for name in store.tables(conn):
         if not name.startswith("course_"):
             continue
-        df = db.open_table(name).to_pandas()
         rows = []
-        for _, r in df.iterrows():
-            md = dict(r["metadata"])
-            label = retrieval.citation_for(md, md.get("ref_doc_id") or md.get("doc_id") or "")["label"]
-            rows.append({"id": r["id"], "text": r["text"], "label": label, "type": md.get("item_type") or "file"})
+        for r in store.rows(conn, name):
+            label = retrieval.citation_for(r["metadata"], r["doc_id"])["label"]
+            rows.append({"id": r["id"], "text": r["text"], "label": label, "type": r["metadata"].get("item_type") or "file"})
         courses[int(name.split("_")[1])] = rows
+    conn.close()
     return courses
 
 

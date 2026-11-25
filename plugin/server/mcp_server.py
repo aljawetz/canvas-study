@@ -83,18 +83,69 @@ def _table(course_id: int) -> str:
     return f"course_{course_id}"
 
 
-def indexed_course_ids(home: Path) -> list[int]:
-    db_path = home / "index.lancedb"
-    if not db_path.exists():
-        return []
-    import lancedb
+def _index_db(home: Path) -> Path:
+    return home / "index.db"
 
-    ids = []
-    for name in lancedb.connect(str(db_path)).list_tables().tables:
-        prefix, _, rest = name.partition("_")
-        if prefix == "course" and rest.isdigit():
-            ids.append(int(rest))
-    return sorted(ids)
+
+def _manifest_state(home: Path, course_id: int) -> tuple[int, int] | None:
+    """(items synced, index format) from a course's manifest, read-only; None without one."""
+    path = home / "courses" / str(course_id) / "manifest.db"
+    if not path.exists():
+        return None
+    import sqlite3
+
+    conn = sqlite3.connect(f"{path.as_uri()}?mode=ro", uri=True)
+    try:
+        items = conn.execute("SELECT COUNT(*) FROM manifest").fetchone()[0]
+        has_meta = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'meta'").fetchone()
+        row = conn.execute("SELECT value FROM meta WHERE key = 'index_format'").fetchone() if has_meta else None
+        return items, int(row[0]) if row else 0
+    except sqlite3.Error:
+        return None
+    finally:
+        conn.close()
+
+
+def indexed_course_ids(home: Path) -> list[int]:
+    """Courses synced on this machine: their manifest lists items. Not "has a
+    table in index.db": right after an update that changes the index format,
+    the table is being rebuilt, and the course is still the student's."""
+    courses = home / "courses"
+    if not courses.exists():
+        return []
+    ids = [int(d.name) for d in courses.iterdir() if d.name.isdigit()]
+    return sorted(cid for cid in ids if (state := _manifest_state(home, cid)) and state[0] > 0)
+
+
+def outdated_course_ids(home: Path) -> list[int]:
+    """Indexed courses whose chunks are in an older format than this version writes."""
+    return [cid for cid in indexed_course_ids(home) if _manifest_state(home, cid)[1] < indexing.INDEX_FORMAT]
+
+
+def rebuild_outdated(home: Path, jobs: "sync_jobs.SyncJobs") -> None:
+    """At startup, re-index every course still in an older format, in the
+    background (course_sync rebuilds it item by item). Without this, a course
+    whose index moved to a new store would wait for a refresh that only an
+    existing index triggers."""
+    for course_id in outdated_course_ids(home):
+        logger.info("course %s is in an older index format: rebuilding", course_id)
+        jobs.start(course_id)
+
+
+def drop_old_index(home: Path) -> None:
+    """Removes 0.3.5's LanceDB index once no course needs rebuilding: until
+    then a Claude Code window still on the old version may be searching it."""
+    old = home / "index.lancedb"
+    if old.exists() and not outdated_course_ids(home):
+        import shutil
+
+        shutil.rmtree(old, ignore_errors=True)
+
+
+PARTIAL = ("This course is being re-indexed after a Canvas Study update, so these results may be missing items "
+           "that aren't back in the index yet.")
+REBUILDING = ("Course {cid} is being re-indexed after a Canvas Study update{progress}, so it can't be searched for a "
+              "few minutes. Its deadlines, grades and feedback (list_assignments, get_grades) work meanwhile.")
 
 
 # How old an index may get before using it starts a background refresh. A
@@ -120,7 +171,7 @@ def refresh_if_stale(home: Path, jobs: "sync_jobs.SyncJobs", course_id: int, tok
     """Starts a background sync of an indexed course whose last sync is old,
     and returns a note for the answer; None when the index is fresh enough
     (or isn't there: syncing a new course is the student's call)."""
-    if not indexing.index_exists(home / "index.lancedb", _table(course_id)):
+    if course_id not in indexed_course_ids(home):
         return None
     now = now or datetime.now(timezone.utc)
     status = sync_jobs.read_status(home, course_id) or {}
@@ -212,12 +263,12 @@ def backfill_course_names(home: Path, courses_for: Callable[[], list[dict]] = ca
     session_note.write_note(home, ids)
 
 
-def make_searcher(table, embed):
-    """The searcher for one course's table. It returns MAX_K, not its default 5, so search's [:k] can reach
-    MAX_K; fusion orders before it cuts, so the first 5 of 10 are the same top 5."""
+def make_searcher(index, embed):
+    """The searcher for one course's index (store.CourseIndex). It returns MAX_K, not its default 5, so
+    search's [:k] can reach MAX_K; fusion orders before it cuts, so the first 5 of 10 are the same top 5."""
     import retrieval
 
-    return retrieval.HybridSearcher(indexing.LanceIndex(table), embed, top_k=MAX_K)
+    return retrieval.HybridSearcher(index, embed, top_k=MAX_K)
 
 
 _embed_query = None
@@ -237,7 +288,9 @@ def _query_embedder():
 
 def _searcher_factory(home: Path):
     def make(course_id: int):
-        return make_searcher(indexing.open_table(home / "index.lancedb", _table(course_id)), _query_embedder())
+        import store
+
+        return make_searcher(store.CourseIndex(_index_db(home), _table(course_id)), _query_embedder())
 
     return make
 
@@ -279,9 +332,14 @@ class Searcher:
         k = max(1, min(int(k), MAX_K))
         # Checked only until the course's searcher exists: a missing course
         # is not cached, so it is found once a sync creates its table.
-        if course_id not in self._searchers and not indexing.index_exists(self._home / "index.lancedb", _table(course_id)):
+        if course_id not in self._searchers and not indexing.index_exists(_index_db(self._home), _table(course_id)):
             # Logged too, so the eval sees the tool call even though nothing came back.
             _log_query(course_id, query, [], 0.0)
+            if course_id in indexed_course_ids(self._home):
+                status = sync_jobs.read_status(self._home, course_id) or {}
+                done = status.get("items_done")
+                progress = f" ({done} items done so far)" if status.get("state") == "running" and done else ""
+                return {"course_id": course_id, "results": [], "note": REBUILDING.format(cid=course_id, progress=progress)}
             return {
                 "course_id": course_id,
                 "results": [],
@@ -311,17 +369,22 @@ class Searcher:
         out = {"course_id": course_id, "query": query, "results": results}
         if not results:
             out["note"] = NO_RESULTS
+        if course_id in outdated_course_ids(self._home):
+            out["rebuilding"] = PARTIAL
         return out
 
 
 def _index_rows(home: Path, course_id: int) -> list[dict]:
     """Every indexed chunk's id, text and metadata, without the vectors."""
-    if not indexing.index_exists(home / "index.lancedb", _table(course_id)):
+    if not _index_db(home).exists():
         return []
-    import lancedb
+    import store
 
-    table = lancedb.connect(str(home / "index.lancedb")).open_table(_table(course_id))
-    return table.to_arrow().select(["doc_id", "text", "metadata"]).to_pylist()
+    conn = store.connect(_index_db(home))
+    try:
+        return store.rows(conn, _table(course_id))
+    finally:
+        conn.close()
 
 
 def _canvas_failure(error: Exception) -> str:
@@ -401,14 +464,18 @@ def sync_status_result(home: Path, course_id: int | None) -> dict:
 
 def build_server(home: Path | None = None, searcher: Searcher | None = None, courses_for=canvas.list_courses,
                  assignments_for=canvas.list_assignments, zone_for=None, jobs=None,
-                 course_grades_for=canvas.get_course_grades, groups_for=canvas.list_assignment_groups) -> MCPServer:
+                 course_grades_for=canvas.get_course_grades, groups_for=canvas.list_assignment_groups,
+                 rebuild_on_start: bool = False) -> MCPServer:
     home = home or sm_home()
     searcher = searcher or Searcher(home)
     def synced(course_id: int) -> None:
         searcher.forget(course_id)
         session_note.write_note(home, indexed_course_ids(home))
+        drop_old_index(home)
 
     jobs = jobs or sync_jobs.SyncJobs(home, on_done=synced)
+    if rebuild_on_start:
+        rebuild_outdated(home, jobs)
     zone_for = zone_for or canvas_zone()
     server = MCPServer("canvas-study", instructions=INSTRUCTIONS)
 
@@ -506,8 +573,10 @@ def main() -> None:
     # A daemon thread: a slow or unreachable Canvas never delays the server.
     import threading
 
-    threading.Thread(target=backfill_course_names, args=(sm_home(),), daemon=True, name="backfill-names").start()
-    build_server().run("stdio")
+    home = sm_home()
+    drop_old_index(home)
+    threading.Thread(target=backfill_course_names, args=(home,), daemon=True, name="backfill-names").start()
+    build_server(home, rebuild_on_start=True).run("stdio")
 
 
 if __name__ == "__main__":

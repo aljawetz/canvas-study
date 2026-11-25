@@ -36,7 +36,7 @@ SUPPORTED_FILE_SUFFIXES = {".pdf", ".pptx", *SECTION_EXTRACTORS}
 def _course_paths(sm_home: Path, course_id: int) -> tuple[Path, Path]:
     course_dir = sm_home / "courses" / str(course_id)
     course_dir.mkdir(parents=True, exist_ok=True)
-    return course_dir / "manifest.db", sm_home / "index.lancedb"
+    return course_dir / "manifest.db", sm_home / "index.db"
 
 
 def _sync_deleted(conn, db_path, table_name, item_type, deleted_ids):

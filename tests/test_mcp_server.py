@@ -21,6 +21,7 @@ import pytest
 from mcp import Client, StdioServerParameters
 
 import indexing
+import store
 import mcp_server
 import sync
 from embeddings import EMBEDDING_DIM
@@ -61,8 +62,18 @@ _PAGES = [
 
 
 def _add(home: Path, chunks, course_id: int = COURSE):
-    indexing.add_nodes(chunks, home / "index.lancedb", f"course_{course_id}", embed=_HashEmbedding().embed)
-    return indexing.open_table(home / "index.lancedb", f"course_{course_id}")
+    """Index chunks the way a sync leaves them: in index.db and in the course's manifest."""
+    import sync
+
+    indexing.add_nodes(chunks, home / "index.db", f"course_{course_id}", embed=_HashEmbedding().embed)
+    (home / "courses" / str(course_id)).mkdir(parents=True, exist_ok=True)
+    conn = sync.open_manifest(home / "courses" / str(course_id) / "manifest.db")
+    for c in chunks:
+        kind = c.item_id.split(":")[0]
+        sync.mark_synced(conn, c.item_id, kind, c.metadata.get("source") or c.item_id, "2026-01-01", "h")
+    sync.set_index_format(conn, indexing.INDEX_FORMAT)
+    conn.close()
+    return store.CourseIndex(home / "index.db", f"course_{course_id}")
 
 
 def _build_index(home: Path, course_id: int = COURSE, pages=_PAGES):
@@ -84,6 +95,7 @@ def _searcher(home: Path, table):
 _WRITER = """
 import sys
 import indexing
+import store
 chunk = indexing.Chunk("Weekly quizzes are open book.", {"source": "quiz policy", "item_type": "page", "page": None,
                        "slide": None}, "page:quiz-policy")
 unit = [1.0] + [0.0] * (indexing.EMBEDDING_DIM - 1)
@@ -98,7 +110,7 @@ def test_a_search_sees_a_sync_written_by_another_server_process(tmp_path):
     searcher, _ = _searcher(tmp_path, _build_index(tmp_path))
     assert searcher.search(COURSE, "quizzes open book")["results"] == []
 
-    subprocess.run([sys.executable, "-c", _WRITER, str(tmp_path / "index.lancedb"), f"course_{COURSE}"], check=True,
+    subprocess.run([sys.executable, "-c", _WRITER, str(tmp_path / "index.db"), f"course_{COURSE}"], check=True,
                    env={**os.environ, "PYTHONPATH": str(Path(indexing.__file__).parent)})
 
     assert [r["source"] for r in searcher.search(COURSE, "quizzes open book")["results"]] == ["quiz policy"]
@@ -252,7 +264,7 @@ def _canvas_course(cid, name, **extra):
 
 def test_list_courses_lists_canvas_courses_and_marks_the_indexed_ones(tmp_path):
     _build_index(tmp_path, COURSE)
-    (tmp_path / "courses" / str(COURSE)).mkdir(parents=True)
+    (tmp_path / "courses" / str(COURSE)).mkdir(parents=True, exist_ok=True)
     conn = sync.open_manifest(tmp_path / "courses" / str(COURSE) / "manifest.db")
     sync.mark_synced(conn, "file:1", "file", "a.pdf", "2026-10-01T00:00:00Z", "h1")
     conn.close()
@@ -634,3 +646,83 @@ def test_backfill_without_canvas_or_index_does_nothing(tmp_path):
     _build_index(tmp_path)
     mcp_server.backfill_course_names(tmp_path, offline)  # Canvas down: no crash, no note
     assert not (tmp_path / "session_start.json").exists()
+
+
+# --- moving an install to a new index format (#36) ---------------------------
+
+def _old_install_course(home, course_id, fmt):
+    """A course synced by an older version: its manifest lists items, stamped
+    with an older format (0: before stamps), and index.db has no table for it."""
+    import sync
+
+    (home / "courses" / str(course_id)).mkdir(parents=True, exist_ok=True)
+    conn = sync.open_manifest(home / "courses" / str(course_id) / "manifest.db")
+    sync.mark_synced(conn, "file:1", "file", "a.pdf", "2026-01-01", "h")
+    if fmt:
+        sync.set_index_format(conn, fmt)
+    conn.close()
+
+
+def test_a_course_waiting_for_its_rebuild_still_counts_as_indexed(tmp_path):
+    _old_install_course(tmp_path, 7, 0)
+    _build_index(tmp_path, COURSE)
+    import sync
+
+    (tmp_path / "courses" / "8").mkdir(parents=True)  # a first sync that failed: an empty manifest, not indexed
+    sync.open_manifest(tmp_path / "courses" / "8" / "manifest.db").close()
+
+    assert mcp_server.indexed_course_ids(tmp_path) == [7, COURSE]
+    assert mcp_server.outdated_course_ids(tmp_path) == [7]
+
+
+def test_startup_rebuilds_only_the_outdated_courses(tmp_path):
+    _old_install_course(tmp_path, 7, 0)
+    _old_install_course(tmp_path, 9, indexing.INDEX_FORMAT - 1)
+    _build_index(tmp_path, COURSE)
+    jobs = _FakeJobs()
+
+    mcp_server.build_server(tmp_path, courses_for=list, jobs=jobs, rebuild_on_start=True)
+
+    assert sorted(jobs.started) == [7, 9]
+    jobs = _FakeJobs()
+    mcp_server.build_server(tmp_path, courses_for=list, jobs=jobs)  # tests and tools: no rebuild unless asked
+    assert jobs.started == []
+
+
+def test_search_on_a_course_being_rebuilt_says_so_and_points_to_live_tools(tmp_path):
+    _old_install_course(tmp_path, 7, 0)
+    _status(tmp_path, "running", course_id=7)
+
+    out = mcp_server.Searcher(tmp_path, make_searcher=lambda cid: None).search(7, "late policy")
+
+    assert out["results"] == []
+    assert "being re-indexed after a Canvas Study update" in out["note"]
+    assert "list_assignments" in out["note"]
+    assert "not indexed" not in out["note"]
+
+
+def test_the_old_lancedb_index_is_removed_only_when_nothing_needs_rebuilding(tmp_path):
+    (tmp_path / "index.lancedb" / "course_7.lance").mkdir(parents=True)
+    _old_install_course(tmp_path, 7, 0)
+
+    mcp_server.drop_old_index(tmp_path)
+    assert (tmp_path / "index.lancedb").exists()  # a window on the old version may still search it
+
+    _old_install_course(tmp_path, 7, indexing.INDEX_FORMAT)
+    mcp_server.drop_old_index(tmp_path)
+    assert not (tmp_path / "index.lancedb").exists()
+
+
+def test_search_during_a_rebuild_says_results_may_be_incomplete(tmp_path):
+    import sync
+
+    table = _build_index(tmp_path)
+    searcher, _ = _searcher(tmp_path, table)
+    assert "rebuilding" not in searcher.search(COURSE, "final exam")
+
+    conn = sync.open_manifest(tmp_path / "courses" / str(COURSE) / "manifest.db")
+    sync.set_index_format(conn, indexing.INDEX_FORMAT - 1)  # rebuild under way: some items are back, some aren't
+    conn.close()
+    out = searcher.search(COURSE, "final exam")
+
+    assert out["results"] and "may be missing items" in out["rebuilding"]

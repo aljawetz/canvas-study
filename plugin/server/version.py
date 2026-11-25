@@ -5,7 +5,7 @@ is a new version and uvx builds a fresh env for it."""
 import hashlib
 from pathlib import Path
 
-RELEASE = "0.3.5"
+RELEASE = "0.4.0"
 
 _here = Path(__file__).resolve().parent
 _digest = hashlib.sha256()

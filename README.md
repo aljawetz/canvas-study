@@ -33,8 +33,8 @@ Then run:
 /canvas-study:setup
 ```
 
-Setup downloads what it needs the first time (about 320 MB, and about 800 MB on disk once installed: the local
-search database, the search model and its runtime, and Python), lets you pick your courses and indexes them. Then ask away: "What's due this week?", "What does the syllabus say about late work?"
+Setup downloads what it needs the first time (about 215 MB, and about 500 MB on disk once installed: the search
+model and its runtime, the document readers, and Python), lets you pick your courses and indexes them. Then ask away: "What's due this week?", "What does the syllabus say about late work?"
 
 Works on macOS and Linux. Windows isn't supported yet.
 
@@ -67,7 +67,7 @@ An indexed course keeps itself current: when Claude searches a course whose last
 server starts an incremental sync in the background (only new or changed items are re-read) and answers from the
 index meanwhile. Deadlines and grades are always read live.
 
-Search is hybrid (vector + keyword, rank fusion) over a local LanceDB index, with the
+Search is hybrid (vector + keyword, rank fusion) over a local SQLite index (FTS5 for keywords, numpy for vectors), with the
 [bge-small-en-v1.5](https://huggingface.co/BAAI/bge-small-en-v1.5) embedding model running on your machine.
 
 ## Development

@@ -3,8 +3,8 @@
 Turns ingestion.py's extraction output into chunks carrying citation
 metadata: a page or slide is a chunk, not an arbitrary token window, and
 split_text only cuts prose long enough to need it. Each course is one
-LanceDB table (<data folder>/index.lancedb/course_<id>) written directly.
-Callers pass db_path: the plugin's data folder, or a scratch dir in tests.
+table in the SQLite index (<data folder>/index.db, store.py).
+Callers pass db_path: the index file (<data folder>/index.db), or a scratch file in tests.
 """
 
 import re
@@ -12,14 +12,9 @@ import uuid
 from dataclasses import dataclass
 from pathlib import Path
 
-from datetime import timedelta
-
-import lancedb
-import pyarrow as pa
-from lancedb.expr import col, lit
-from lancedb.index import FTS
 from tokenizers import Tokenizer
 
+import store
 from embeddings import EMBEDDING_DIM, MODEL_DIR
 
 # Tokens, counted with BGE's own tokenizer. Must stay under the embedding
@@ -38,7 +33,8 @@ from embeddings import EMBEDDING_DIM, MODEL_DIR
 # so every install's next sync re-indexes each course once in the new format
 # (course_sync, sync.index_format); an incremental sync otherwise only
 # re-indexes what changed on Canvas.
-INDEX_FORMAT = 1
+# 2: LanceDB -> SQLite (#36).
+INDEX_FORMAT = 2
 
 CHUNK_SIZE = 400
 CHUNK_OVERLAP = 60  # ~15%
@@ -219,26 +215,6 @@ def slides_to_nodes(slides: list[dict], source: str, canvas_item_id: str) -> lis
     ]
 
 
-# Every course table's layout, stated up front instead of inferred. LanceDB
-# otherwise infers column types from the first batch written, and a column
-# that's None in every row of that batch becomes type null for good, so
-# whichever material reached a course first would decide what it could ever
-# hold (a course whose first batch had no page numbers rejected every PDF).
-TABLE_SCHEMA = pa.schema(
-    [
-        ("id", pa.string()),
-        ("doc_id", pa.string()),  # the Canvas item id, e.g. "file:123"
-        ("vector", pa.list_(pa.float32(), EMBEDDING_DIM)),
-        ("text", pa.string()),
-        ("metadata", pa.struct([
-            ("source", pa.string()),
-            ("item_type", pa.string()),
-            ("page", pa.int64()),
-            ("slide", pa.int64()),
-        ])),
-    ]
-)
-
 _embedder = None
 
 
@@ -251,65 +227,37 @@ def _default_embed(text: str) -> list[float]:
     return _embedder.embed(text)
 
 
-def open_table(db_path: Path, table_name: str):
-    """A course's table, for search. A LanceDB handle otherwise keeps reading
-    the version it was opened at, so a sync by another Claude session (another
-    server process) went unseen until restart. Checking for a newer version on
-    every read costs ~1.5 ms on a ~35 ms search of a 3.5k-chunk course."""
-    return lancedb.connect(str(db_path), read_consistency_interval=timedelta(0)).open_table(table_name)
-
-
-class LanceIndex:
-    """A LanceDB table answering retrieval.HybridSearcher's two searches."""
-
-    def __init__(self, table):
-        self._table = table
-
-    def vector(self, query_vector, limit: int) -> list[tuple[dict, float]]:
-        rows = (self._table.search(query_vector, vector_column_name="vector").distance_type("cosine")
-                .limit(limit).to_list())
-        return [(r, 1.0 - r["_distance"]) for r in rows]
-
-    def keyword(self, query: str, limit: int) -> list[tuple[dict, float]]:
-        rows = self._table.search(query, query_type="fts").limit(limit).to_list()
-        return [(r, float(r["_score"])) for r in rows]
-
-
 def index_exists(db_path: Path, table_name: str) -> bool:
-    if not db_path.exists():
+    if not Path(db_path).exists():
         return False
-    return table_name in lancedb.connect(str(db_path)).list_tables().tables
-
-
-def ensure_fts_index(table) -> None:
-    """BM25 full-text index for HybridSearcher (retrieval.py), which exact
-    names and keywords need. Built only when missing: LanceDB keeps it on
-    the table, and rows added later are searched too (unindexed rows are
-    scanned until the index is optimized)."""
-    if any(getattr(i, "index_type", None) == "FTS" for i in table.list_indices()):
-        return
-    table.create_index("text", config=FTS(), replace=True)
+    conn = store.connect(db_path)
+    try:
+        return store.table_exists(conn, table_name)
+    finally:
+        conn.close()
 
 
 def add_nodes(chunks: list[Chunk], db_path: Path, table_name: str, embed=None) -> None:
-    """Embeds chunks and adds them to a course's table, creating it on the
-    first write. embed is a test seam; by default the BGE model."""
+    """Embeds chunks and adds them to a course's table (store.py), creating
+    it on the first write. embed is a test seam; by default the BGE model."""
     if not chunks:
         return
     embed = embed or _default_embed
     rows = [{"id": str(uuid.uuid4()), "doc_id": c.item_id, "vector": embed(c.text), "text": c.text,
              "metadata": c.metadata} for c in chunks]
-    db = lancedb.connect(str(db_path))
-    if table_name in db.list_tables().tables:
-        table = db.open_table(table_name)
-        table.add(rows)
-    else:
-        table = db.create_table(table_name, data=rows, schema=TABLE_SCHEMA)
-    ensure_fts_index(table)
+    conn = store.connect(db_path)
+    try:
+        store.add(conn, table_name, rows)
+    finally:
+        conn.close()
 
 
 def delete_ref_doc_nodes(db_path: Path, table_name: str, ref_doc_id: str) -> None:
     """Removes every chunk of one Canvas item (a changed or deleted file)."""
-    if not index_exists(db_path, table_name):
+    if not Path(db_path).exists():
         return
-    open_table(db_path, table_name).delete(col("doc_id") == lit(ref_doc_id))
+    conn = store.connect(db_path)
+    try:
+        store.delete_doc(conn, table_name, ref_doc_id)
+    finally:
+        conn.close()

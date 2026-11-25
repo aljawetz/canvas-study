@@ -9,7 +9,6 @@ dependencies = []
 [dependency-groups]
 dev = [
     "canvas-study-mcp",
-    "pandas>=2.2",  # tests and benchmark scripts read tables into DataFrames; the server doesn't
     "pytest>=8.3",
     "respx>=0.22",
 ]
