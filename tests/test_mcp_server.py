@@ -666,7 +666,10 @@ def _old_install_course(home, course_id, fmt):
 def test_a_course_waiting_for_its_rebuild_still_counts_as_indexed(tmp_path):
     _old_install_course(tmp_path, 7, 0)
     _build_index(tmp_path, COURSE)
-    (tmp_path / "courses" / "8").mkdir(parents=True)  # a first sync that failed: no items, not indexed
+    import sync
+
+    (tmp_path / "courses" / "8").mkdir(parents=True)  # a first sync that failed: an empty manifest, not indexed
+    sync.open_manifest(tmp_path / "courses" / "8" / "manifest.db").close()
 
     assert mcp_server.indexed_course_ids(tmp_path) == [7, COURSE]
     assert mcp_server.outdated_course_ids(tmp_path) == [7]
