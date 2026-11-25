@@ -217,7 +217,7 @@ def make_searcher(table, embed):
     MAX_K; fusion orders before it cuts, so the first 5 of 10 are the same top 5."""
     import retrieval
 
-    return retrieval.HybridSearcher(table, embed, top_k=MAX_K)
+    return retrieval.HybridSearcher(indexing.LanceIndex(table), embed, top_k=MAX_K)
 
 
 _embed_query = None

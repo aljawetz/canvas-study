@@ -259,6 +259,22 @@ def open_table(db_path: Path, table_name: str):
     return lancedb.connect(str(db_path), read_consistency_interval=timedelta(0)).open_table(table_name)
 
 
+class LanceIndex:
+    """A LanceDB table answering retrieval.HybridSearcher's two searches."""
+
+    def __init__(self, table):
+        self._table = table
+
+    def vector(self, query_vector, limit: int) -> list[tuple[dict, float]]:
+        rows = (self._table.search(query_vector, vector_column_name="vector").distance_type("cosine")
+                .limit(limit).to_list())
+        return [(r, 1.0 - r["_distance"]) for r in rows]
+
+    def keyword(self, query: str, limit: int) -> list[tuple[dict, float]]:
+        rows = self._table.search(query, query_type="fts").limit(limit).to_list()
+        return [(r, float(r["_score"])) for r in rows]
+
+
 def index_exists(db_path: Path, table_name: str) -> bool:
     if not db_path.exists():
         return False
