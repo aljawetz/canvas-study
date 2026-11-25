@@ -24,7 +24,7 @@ def test_the_note_names_indexed_courses_only(tmp_path):
     text = note["hookSpecificOutput"]["additionalContext"]
     assert note["hookSpecificOutput"]["hookEventName"] == "SessionStart"
     assert "Software Testing" in text and "Requirements" in text and "Orientation" not in text
-    assert "canvas-study:ask" in text
+    assert "canvas-study:answering-course-questions" in text
     assert "systemMessage" not in note  # a hint for Claude, not a banner shown to the student every session
 
 

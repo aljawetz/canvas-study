@@ -189,7 +189,7 @@ def test_search_returns_more_than_five_when_k_asks(tmp_path):
 
 
 def test_search_returns_the_query_exactly_as_sent(tmp_path):
-    # Relative dates ("tomorrow") are Claude's to resolve (skills/ask); the
+    # Relative dates ("tomorrow") are Claude's to resolve (skills/answering-course-questions); the
     # server searches and reports the query unchanged.
     index = _build_index(tmp_path)
     searcher, _ = _searcher(tmp_path, index)

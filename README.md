@@ -58,7 +58,7 @@ Uninstalling the plugin deletes its data folder.
 | Part | What it does |
 | --- | --- |
 | `plugin/skills/setup` | `/canvas-study:setup`: gets the server and model ready, checks the token, syncs the courses you pick |
-| `plugin/skills/ask` | Routes course questions to the right tool, cites sources as Canvas links, refuses graded work |
+| `plugin/skills/answering-course-questions` | Routes course questions to the right tool, cites sources as Canvas links, refuses graded work |
 | `plugin/server` | The MCP server: `list_courses`, `search_course_material`, `list_course_items`, `list_assignments`, `get_grades`, `sync_course`, `sync_status` |
 | `plugin/scripts/server` | Starts the server with `uv` (installed into the plugin's data folder if missing) |
 | `plugin/hooks` | Points you to setup until a course is indexed |
