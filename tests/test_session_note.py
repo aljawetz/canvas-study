@@ -3,6 +3,8 @@ told which courses the student has indexed, so a concept question about one
 of them reaches the plugin instead of being answered from general knowledge."""
 
 import json
+import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -14,7 +16,10 @@ HOOK = Path(__file__).resolve().parent.parent / "plugin" / "scripts" / "session-
 
 
 def _hook(home: Path) -> str:
-    return subprocess.run([str(HOOK)], env={"SM_HOME": str(home), "PATH": "/usr/bin:/bin"},
+    """Runs the hook the way Claude Code does: through sh (Git for Windows' sh
+    on Windows, which can't execute a script file directly)."""
+    path = os.environ["PATH"] if os.name == "nt" else "/usr/bin:/bin"
+    return subprocess.run([shutil.which("sh", path=path) or "sh", str(HOOK)], env={"SM_HOME": str(home), "PATH": path},
                           capture_output=True, text=True, check=True).stdout
 
 

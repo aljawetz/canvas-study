@@ -221,7 +221,7 @@ def test_query_log_records_each_search_when_set(tmp_path, monkeypatch):
     searcher.search(COURSE, "late work penalty")
     searcher.search(COURSE, "team size")
 
-    entries = [json.loads(line) for line in log.read_text().splitlines()]
+    entries = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
     assert [e["query"] for e in entries] == ["late work penalty", "team size"]
     assert entries[0]["sources"][0] == "syllabus · p.9"
     assert entries[0]["texts"][0] == "Late work loses ten percent per day."
@@ -244,7 +244,7 @@ def test_query_log_records_a_search_on_a_course_with_no_index(tmp_path, monkeypa
 
     searcher.search(999, "anything")
 
-    entries = [json.loads(line) for line in log.read_text().splitlines()]
+    entries = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines()]
     assert entries == [{"course_id": 999, "query": "anything", "sources": [], "texts": [], "seconds": 0.0}]
 
 

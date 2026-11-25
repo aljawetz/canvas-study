@@ -162,6 +162,9 @@ class CourseIndex:
         self._ids: list[int] = []
         self._matrix = np.zeros((0, EMBEDDING_DIM), dtype=np.float32)
 
+    def close(self) -> None:
+        self._conn.close()
+
     def _vectors(self):
         version = self._conn.execute("PRAGMA data_version").fetchone()[0]
         if version != self._version or self._version is None:
