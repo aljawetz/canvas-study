@@ -770,6 +770,30 @@ def test_a_file_no_longer_linked_anywhere_is_removed(tmp_path, stub_extraction, 
     assert "file:444" in ids and "file:333" not in ids
 
 
+def test_a_file_linked_from_a_page_that_cant_be_read_is_not_deleted(tmp_path, stub_extraction, files_by_id, monkeypatch):
+    """A page listed without its body has its links read every sync. If that
+    read fails, which files it links to is unknown, so none counts as gone.
+    The slides stay listed in Modules, so the file listing isn't empty (an
+    empty listing is guarded separately)."""
+    monkeypatch.setattr(course_sync.canvas, "get_course_structure",
+                        lambda course_id: [{"name": "Week 1", "items": [{"type": "File", "content_id": 444}]}])
+    monkeypatch.setattr(course_sync.canvas, "list_pages",
+                        lambda course_id: [{"url": "readings", "title": "Readings", "updated_at": "1"}])
+    monkeypatch.setattr(course_sync.canvas, "get_page",
+                        lambda course_id, url: {"url": url, "title": "Readings", "body": _link(333), "updated_at": "1"})
+    run(1, tmp_path)
+    assert "file:333" in _manifest_ids(tmp_path)
+
+    def unreadable(course_id, url):
+        raise RuntimeError("Canvas timed out")
+
+    monkeypatch.setattr(course_sync.canvas, "get_page", unreadable)
+    events = run(1, tmp_path)
+
+    assert events[-1]["removed"] == 0
+    assert {"file:333", "file:444"} <= _manifest_ids(tmp_path)
+
+
 def test_announcements_are_indexed_with_their_posted_date(tmp_path, stub_extraction, monkeypatch):
     monkeypatch.setattr(course_sync.canvas, "get_course_structure", lambda course_id: [])
     monkeypatch.setattr(course_sync.canvas, "list_pages", lambda course_id: [])

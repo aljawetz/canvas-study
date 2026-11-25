@@ -14,8 +14,6 @@ from datetime import datetime, tzinfo
 from functools import partial
 from pathlib import Path
 
-import httpx
-
 import canvas
 import citation_links
 import course_items
@@ -294,7 +292,7 @@ def sync_course(course_id: int, sm_home: Path):
         announcements = canvas.list_announcements(course_id)
         discussions = canvas.list_discussions(course_id)
         quizzes = canvas.list_quizzes(course_id)
-    except (canvas.CanvasError, httpx.HTTPStatusError, httpx.TransportError) as e:
+    except canvas.ERRORS as e:
         yield {"done": True, "error": str(e)}
         return
 
