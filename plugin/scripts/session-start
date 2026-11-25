@@ -4,9 +4,8 @@
 # tell Claude which courses the student has. The not-set-up note says only
 # what was true at startup: setup can index a course later in the same session.
 HOME_DIR="${SM_HOME:-${CLAUDE_PLUGIN_DATA:-}}"
-# index.db is written by the first indexed item; index.lancedb is 0.3.5's index,
-# kept until every course is rebuilt into index.db.
-if [ -n "$HOME_DIR" ] && { [ -f "$HOME_DIR/index.db" ] || [ -d "$HOME_DIR/index.lancedb" ]; }; then
+# index.db is written by the first indexed item.
+if [ -n "$HOME_DIR" ] && [ -f "$HOME_DIR/index.db" ]; then
   # Set up: name the student's courses (server/session_note.py writes this
   # whenever the course list can have changed).
   [ -f "$HOME_DIR/session_start.json" ] && cat "$HOME_DIR/session_start.json"

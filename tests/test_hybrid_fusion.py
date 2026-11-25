@@ -47,7 +47,7 @@ def test_empty_inputs_give_empty_result():
 
 def _row(hit_id, **extra):
     return {"id": hit_id, "text": f"text {hit_id}", "doc_id": f"file:{hit_id}",
-            "metadata": {"source": f"{hit_id}.pdf", "page": 1, "item_type": "file", "_node_content": "{}"}, **extra}
+            "metadata": {"source": f"{hit_id}.pdf", "page": 1, "item_type": "file"}, **extra}
 
 
 class _Index:
@@ -99,10 +99,9 @@ def test_search_fetches_more_candidates_and_dedupes():
     assert s._index.limits == {"vector": retrieval.VECTOR_CANDIDATES, "fts": retrieval.FTS_TOP_K}
 
 
-def test_hits_carry_text_citation_fields_and_no_internal_metadata():
+def test_hits_carry_text_and_citation_fields():
     hit = _searcher([], [_row("x", _score=1.0)]).search("q")[0]
     assert hit.text == "text x" and hit.item_id == "file:x"
-    assert "_node_content" not in hit.metadata
     assert retrieval.citation(hit) == {"source_type": "file", "label": "x.pdf · p.1", "item_id": "file:x"}
 
 

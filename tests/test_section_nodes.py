@@ -4,6 +4,11 @@ at a time, each starting with where it came from."""
 import indexing
 
 
+def _tokens(text):
+    """BGE's tokens for text, with its [CLS] and [SEP]: what the model's 512-token window counts."""
+    return indexing._tokenizer().encode(text).tokens
+
+
 def _texts(sections, source="Syllabus"):
     return [n.text for n in indexing.sections_to_nodes(sections, source, "syllabus:1", "syllabus")]
 
@@ -50,7 +55,7 @@ def test_long_sections_split_under_the_embedding_window():
     nodes = indexing.sections_to_nodes([{"heading": "Course Calendar", "text": long_text}], "Syllabus", "syllabus:1", "syllabus")
     assert len(nodes) > 1
     assert all(n.text.startswith("Syllabus › Course Calendar\n") for n in nodes)
-    assert all(len(indexing._tokenize(n.text)) <= 512 for n in nodes)
+    assert all(len(_tokens(n.text)) <= 512 for n in nodes)
     assert all(n.metadata["item_type"] == "syllabus" and n.metadata["page"] is None for n in nodes)
 
 
@@ -66,4 +71,4 @@ def test_a_marked_full_page_still_fits_the_embedding_window():
     page = [{"page": 1, "text": " ".join(f"Topic {i} is covered in week {i % 14}." for i in range(400))}]
     name = "Course Syllabus and Schedule for Software Requirements and Interaction Design, Fall 2026.pdf"
     chunks = indexing.mark_syllabus_file(indexing.pages_to_nodes(page, name, "file:9"), name)
-    assert len(chunks) > 1 and all(len(indexing._tokenize(c.text)) <= 512 for c in chunks)
+    assert len(chunks) > 1 and all(len(_tokens(c.text)) <= 512 for c in chunks)

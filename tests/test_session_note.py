@@ -8,8 +8,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-import pytest
-
 import session_note
 
 HOOK = Path(__file__).resolve().parent.parent / "plugin" / "scripts" / "session-start"
@@ -49,9 +47,8 @@ def test_no_known_name_means_no_note(tmp_path):
     assert not (tmp_path / session_note.NOTE_FILE).exists()
 
 
-@pytest.mark.parametrize("index", ["index.db", "index.lancedb"])  # 0.3.5's index counts until it is rebuilt
-def test_the_hook_prints_the_note_once_a_course_is_indexed(tmp_path, index):
-    (tmp_path / index).mkdir() if index.endswith("lancedb") else (tmp_path / index).touch()
+def test_the_hook_prints_the_note_once_a_course_is_indexed(tmp_path):
+    (tmp_path / "index.db").touch()
     session_note.remember_names(tmp_path, {1: "Software Testing \"ST\""})  # quotes must stay valid JSON
     session_note.write_note(tmp_path, [1])
 

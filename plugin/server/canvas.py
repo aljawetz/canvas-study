@@ -13,6 +13,7 @@ and gets retried with backoff.
 import os
 import re
 import time
+from datetime import datetime, timezone
 
 import httpx
 
@@ -27,11 +28,28 @@ class CanvasError(Exception):
     """A Canvas API failure that isn't a recoverable 403/404 or 429."""
 
 
+# What a Canvas call can raise when Canvas, the network or the token fails:
+# callers catch these and answer without Canvas.
+ERRORS = (CanvasError, httpx.HTTPStatusError, httpx.TransportError)
+
+
 def _token() -> str:
     token = os.environ.get("SM_CANVAS_TOKEN")
     if not token:
         raise CanvasError("no Canvas token set in the plugin's settings")
     return token
+
+
+def parse_time(value: str | None) -> datetime | None:
+    """An ISO timestamp as Canvas sends it ("2026-11-20T04:59:00Z"), as an
+    aware datetime; one without a zone is taken as UTC. None if missing or bad."""
+    if not value:
+        return None
+    try:
+        moment = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
 
 
 def normalize_base_url(raw: str) -> str:

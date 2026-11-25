@@ -45,8 +45,7 @@ class Hit:
 
 
 def _hit(row: dict, score: float) -> Hit:
-    metadata = {k: v for k, v in dict(row["metadata"] or {}).items() if not k.startswith("_")}
-    return Hit(id=row["id"], text=row["text"] or "", metadata=metadata, item_id=row["doc_id"] or "", score=score)
+    return Hit(id=row["id"], text=row["text"], metadata=row["metadata"], item_id=row["doc_id"], score=score)
 
 
 def reciprocal_rank_fusion(ranked_lists: list[list[Hit]], k: int = RRF_K, top_n: int = 5) -> list[Hit]:

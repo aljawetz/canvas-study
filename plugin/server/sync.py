@@ -1,7 +1,8 @@
 """Sync bookkeeping.
 
 Diffs a course's current Canvas listing (ID + updated_at, cheap metadata
-only) against its manifest.db into new/changed/deleted/unchanged buckets.
+only) against its manifest.db into new/changed/deleted buckets; the rest is
+unchanged.
 Runs when sync_course is called, not as a background daemon.
 
 diff() takes an already-fetched remote listing rather than calling
@@ -62,7 +63,7 @@ def content_hash(text: str) -> str:
 def diff(conn: sqlite3.Connection, item_type: str, remote_items: list[dict],
          rebuild: bool = False) -> dict[str, list[str]]:
     """remote_items: [{"id": str, "updated_at": str}, ...]. Sorts every
-    item into exactly one bucket. With rebuild, every item already indexed
+    item into at most one bucket (an unchanged item is in none). With rebuild, every item already indexed
     counts as changed: its chunks were written in an older format."""
     rows = conn.execute(
         "SELECT canvas_item_id, canvas_updated_at FROM manifest WHERE item_type = ?", (item_type,)
@@ -75,7 +76,6 @@ def diff(conn: sqlite3.Connection, item_type: str, remote_items: list[dict],
         "new": [i for i in remote_map if i not in manifest_map],
         "changed": [i for i in remote_map if i in manifest_map and not same(i)],
         "deleted": [i for i in manifest_map if i not in remote_map],
-        "unchanged": [i for i in remote_map if i in manifest_map and same(i)],
     }
 
 
