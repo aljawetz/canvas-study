@@ -31,3 +31,24 @@ jobs:
         # Empty home and a PATH without the uv that setup-uv installed: the
         # launcher must fetch uv itself, check its SHA-256 and run the server.
         run: env -i HOME="$(mktemp -d)" PATH=/usr/bin:/bin LANG=C.UTF-8 plugin/scripts/server --version
+
+  # Python side on native Windows (#37): the tests, and the server starting
+  # from the same constraints a student installs.
+  test-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.9.28"
+          enable-cache: true
+      - name: Cache the embedding model
+        uses: actions/cache@v4
+        with:
+          path: models
+          key: bge-small-5c38ec7c
+      - run: uv sync
+      - run: uv run pytest -q -p no:cacheprovider
+      - name: The plugin's server builds and starts
+        shell: pwsh
+        run: uvx --python 3.13 --constraints plugin/server/constraints.txt --from ./plugin/server canvas-study-mcp --version
