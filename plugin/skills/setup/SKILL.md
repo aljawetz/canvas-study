@@ -17,9 +17,9 @@ Run this with Bash (timeout 600000):
 "${CLAUDE_PLUGIN_ROOT}/scripts/server" --download-model
 ```
 
-The first time, it downloads the server's packages and Python (about 190 MB) and the search model (about 130 MB), and
+The first time, it downloads the server's packages and Python (about 85 MB) and the search model (about 130 MB), and
 `uv` if the computer has none, so tell the student it can take a minute or two on a good connection, longer on a
-slow one, and uses about 800 MB of disk. Later runs finish in seconds. If it
+slow one, and uses about 500 MB of disk. Later runs finish in seconds. If it
 fails, show the last few lines of its output and stop; a network error usually means trying again later.
 
 ## 2. Make sure the tools are connected
