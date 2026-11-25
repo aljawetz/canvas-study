@@ -121,6 +121,64 @@ def test_second_sync_with_no_remote_changes_reports_nothing(tmp_path, stub_canva
     assert events == [{"done": True, "new": 0, "changed": 0, "removed": 0, "failed": 0}]
 
 
+def _stamp(sm_home, course_id=1):
+    conn = course_sync.sync.open_manifest(sm_home / "courses" / str(course_id) / "manifest.db")
+    try:
+        return course_sync.sync.index_format(conn)
+    finally:
+        conn.close()
+
+
+def test_a_course_indexed_in_an_older_format_is_reindexed_once(tmp_path, stub_canvas, stub_extraction, monkeypatch):
+    run(1, tmp_path)
+    assert _stamp(tmp_path) == course_sync.indexing.INDEX_FORMAT
+    monkeypatch.setattr(course_sync.indexing, "INDEX_FORMAT", course_sync.indexing.INDEX_FORMAT + 1)
+    baseline = len(stub_extraction)
+
+    events = run(1, tmp_path)
+
+    # Nothing changed on Canvas, yet every item is re-indexed: old chunks out, new ones in.
+    assert events[-1] == {"done": True, "new": 0, "changed": 2, "removed": 0, "failed": 0}
+    new_calls = stub_extraction[baseline:]
+    assert {c[2] for c in new_calls if c[0] == "delete"} == {"file:111", "page:week-1-overview"}
+    assert sum(c[0] == "add" for c in new_calls) == 2
+    assert _stamp(tmp_path) == course_sync.indexing.INDEX_FORMAT
+    assert run(1, tmp_path) == [{"done": True, "new": 0, "changed": 0, "removed": 0, "failed": 0}]
+
+
+def test_a_course_from_before_format_stamps_is_reindexed(tmp_path, stub_canvas, stub_extraction):
+    run(1, tmp_path)
+    conn = course_sync.sync.open_manifest(tmp_path / "courses" / "1" / "manifest.db")
+    conn.execute("DROP TABLE meta")  # what a 0.3.5 install's manifest looks like
+    conn.commit()
+    conn.close()
+
+    assert run(1, tmp_path)[-1]["changed"] == 2
+
+
+def test_a_failed_item_does_not_make_every_sync_rebuild(tmp_path, stub_canvas, stub_extraction, monkeypatch):
+    run(1, tmp_path)
+    monkeypatch.setattr(course_sync.indexing, "INDEX_FORMAT", course_sync.indexing.INDEX_FORMAT + 1)
+    def broken_download(url):
+        raise RuntimeError("download failed")
+
+    monkeypatch.setattr(course_sync.canvas, "download", broken_download)
+
+    assert run(1, tmp_path)[-1] == {"done": True, "new": 0, "changed": 1, "removed": 0, "failed": 1}
+    assert _stamp(tmp_path) == course_sync.indexing.INDEX_FORMAT
+
+
+def test_a_sync_that_stops_early_leaves_the_rebuild_for_next_time(tmp_path, stub_canvas, stub_extraction, monkeypatch):
+    run(1, tmp_path)
+    old = course_sync.indexing.INDEX_FORMAT
+    monkeypatch.setattr(course_sync.indexing, "INDEX_FORMAT", old + 1)
+    real_diff = course_sync.sync.diff
+    monkeypatch.setattr(course_sync.sync, "diff", lambda conn, t, r, rebuild=False: (_ for _ in ()).throw(RuntimeError("x")) if t == "quiz" else real_diff(conn, t, r, rebuild))
+
+    assert "error" in run(1, tmp_path)[-1]
+    assert _stamp(tmp_path) == old
+
+
 def test_changed_file_is_resynced(tmp_path, stub_canvas, stub_extraction, monkeypatch):
     run(1, tmp_path)
     baseline = len(stub_extraction)  # first sync's own add calls shouldn't be mistaken for the second sync's
@@ -246,7 +304,7 @@ def test_unexpected_mid_sync_failure_still_yields_a_terminal_event(tmp_path, stu
     waiting forever. Something outside the per-item try/excepts blowing up
     (here: the manifest diff) must still produce a terminal event."""
 
-    def boom(conn, item_type, remote_items):
+    def boom(conn, item_type, remote_items, rebuild=False):
         raise RuntimeError("manifest exploded")
 
     monkeypatch.setattr(course_sync.sync, "diff", boom)

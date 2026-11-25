@@ -25,14 +25,31 @@ CREATE TABLE IF NOT EXISTS manifest (
   last_synced_at    TEXT NOT NULL,
   PRIMARY KEY (canvas_item_id, item_type)
 );
+CREATE TABLE IF NOT EXISTS meta (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 """
 
 
 def open_manifest(db_path: Path) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
-    conn.execute(SCHEMA)
+    conn.executescript(SCHEMA)
     conn.commit()
     return conn
+
+
+def index_format(conn: sqlite3.Connection) -> int:
+    """The chunk format this course was last fully indexed with; 0 for a
+    course indexed before formats were stamped (0.3.5 and earlier)."""
+    row = conn.execute("SELECT value FROM meta WHERE key = 'index_format'").fetchone()
+    return int(row[0]) if row else 0
+
+
+def set_index_format(conn: sqlite3.Connection, version: int) -> None:
+    conn.execute("INSERT INTO meta (key, value) VALUES ('index_format', ?) "
+                 "ON CONFLICT (key) DO UPDATE SET value = excluded.value", (str(version),))
+    conn.commit()
 
 
 def content_hash(text: str) -> str:
@@ -42,20 +59,23 @@ def content_hash(text: str) -> str:
     return hashlib.sha256(text.encode()).hexdigest()
 
 
-def diff(conn: sqlite3.Connection, item_type: str, remote_items: list[dict]) -> dict[str, list[str]]:
+def diff(conn: sqlite3.Connection, item_type: str, remote_items: list[dict],
+         rebuild: bool = False) -> dict[str, list[str]]:
     """remote_items: [{"id": str, "updated_at": str}, ...]. Sorts every
-    item into exactly one bucket."""
+    item into exactly one bucket. With rebuild, every item already indexed
+    counts as changed: its chunks were written in an older format."""
     rows = conn.execute(
         "SELECT canvas_item_id, canvas_updated_at FROM manifest WHERE item_type = ?", (item_type,)
     ).fetchall()
     manifest_map = dict(rows)
     remote_map = {item["id"]: item["updated_at"] for item in remote_items}
 
+    same = lambda i: remote_map[i] == manifest_map[i] and not rebuild
     return {
         "new": [i for i in remote_map if i not in manifest_map],
-        "changed": [i for i in remote_map if i in manifest_map and remote_map[i] != manifest_map[i]],
+        "changed": [i for i in remote_map if i in manifest_map and not same(i)],
         "deleted": [i for i in manifest_map if i not in remote_map],
-        "unchanged": [i for i in remote_map if i in manifest_map and remote_map[i] == manifest_map[i]],
+        "unchanged": [i for i in remote_map if i in manifest_map and same(i)],
     }
 
 
