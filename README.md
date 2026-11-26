@@ -26,7 +26,9 @@ On an older Claude Code, add the marketplace first, then install:
 ```
 
 Claude Code asks for your Canvas URL (default `https://canvas.cmu.edu`) and a Canvas access token. To make one:
-Canvas > Account > Settings > Approved Integrations > **+ New Access Token**.
+Canvas > Account > Settings > Approved Integrations > **+ New Access Token**. If that button isn't there, your school
+doesn't let students create tokens. Some schools give one on request (ask your IT help desk); without one, Canvas
+Study can't connect to your Canvas.
 
 Then run:
 
@@ -42,14 +44,16 @@ uses its shell to start the plugin (and for its own Bash tool).
 
 ## Privacy
 
-Everything stays on your computer:
+Your token and your course index stay on your computer. What you ask about goes to Claude:
 
 - Your Canvas token is kept in your system keychain by Claude Code.
 - Your course index lives in the plugin's data folder (`~/.claude/plugins/data/canvas-study-canvas-study/`).
+- When you ask a question, the course text, deadlines, grades and teacher feedback Claude reads to answer it are
+  sent to Anthropic as part of your Claude Code conversation, like anything else you show Claude, under your
+  account's data settings.
 - The plugin itself calls no AI service and sends no telemetry. It talks only to your Canvas (read-only), plus
   one-time downloads of its Python packages (PyPI, at pinned versions), its search model (Hugging Face) and, if your
-  computer has no `uv`, `uv` itself and the Python it runs on (GitHub releases, checksum-verified). The answers come from Claude Code, under your own Claude
-  account.
+  computer has no `uv`, `uv` itself and the Python it runs on (GitHub releases, checksum-verified).
 
 The full list of what it runs, sends and fetches is in [plugin/README.md](plugin/README.md).
 

@@ -3,6 +3,13 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.4.4 (2026-11-25)
+
+- **Clearer about your data:** the README now says plainly that what Claude reads to answer you (course text,
+  grades, feedback) goes to Anthropic as part of your conversation. The token and the index stay on your computer.
+- **Schools without student tokens:** if Canvas has no "New Access Token" button for you, setup now says your school
+  restricts tokens and suggests asking IT, instead of leaving you stuck.
+
 ## 0.4.3 (2026-11-25)
 
 - **Clickable deadlines:** "What's due this week?" now links each assignment to its Canvas page more reliably, also
