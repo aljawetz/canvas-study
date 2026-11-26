@@ -18,6 +18,7 @@ from datetime import datetime, timedelta, timezone, tzinfo
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import canvas
+import citation_links
 
 DEFAULT_DAYS = 14
 MAX_DAYS = 60
@@ -154,9 +155,11 @@ def _row(assignment: dict, now: datetime, tz: tzinfo) -> dict:
     submission = assignment.get("submission") or {}
     due = _due(assignment)
     comments = teacher_comment_count(assignment)
+    name = assignment.get("name") or f"Assignment {assignment['id']}"
     return {
         "assignment_id": assignment["id"],
-        "name": assignment.get("name") or f"Assignment {assignment['id']}",
+        "name": name,
+        "link": citation_links.markdown_link(name, assignment.get("html_url")),
         **(when(due, tz, now) if due else {}),
         "points_possible": assignment.get("points_possible"),
         "status": _status(assignment, now),

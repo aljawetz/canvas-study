@@ -83,7 +83,7 @@
     },
     {
       "name": "list_assignments",
-      "description": "Live from Canvas: every assignment due in the next `days` days and the last week, submitted or not,\neach with its submission status and score. Times come in the student's zone: show due_at_display as\ngiven. Pass only_unsubmitted when the student asks only for what is left to hand in. With\nassignment_id: that one assignment's description, rubric, submission, score and the teacher's comments\non the submission. A very long description comes with description_cut; pass its description_offset to\nread the rest. with_feedback: every assignment the teacher commented on, any date, with the comments:\nfor what a professor or TA said about the student's work.",
+      "description": "Live from Canvas: every assignment due in the next `days` days and the last week, submitted or not,\neach with its submission status and score. Times come in the student's zone: show due_at_display as\ngiven. Pass only_unsubmitted when the student asks only for what is left to hand in. With\nassignment_id: that one assignment's description, rubric, submission, score and the teacher's comments\non the submission. A very long description comes with description_cut; pass its description_offset to\nread the rest. with_feedback: every assignment the teacher commented on, any date, with the comments:\nfor what a professor or TA said about the student's work. Each assignment comes with link, a markdown\nlink to it on Canvas: write the assignment as that link when you list it.",
       "inputSchema": {
         "type": "object",
         "properties": {

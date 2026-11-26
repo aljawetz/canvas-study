@@ -10,6 +10,14 @@ comes off before the id goes into the URL.
 """
 
 
+def markdown_link(title: str, url: str | None) -> str:
+    """[title](url), ready for Claude to copy into an answer; the title alone
+    without a url. Brackets in the title are escaped so the link stays whole."""
+    if not url:
+        return title
+    return "[" + title.replace("[", "\\[").replace("]", "\\]") + "](" + url + ")"
+
+
 def canvas_url(origin: str, course_id: int, item_type: str | None, item_id: str) -> str | None:
     if not item_id:
         return None

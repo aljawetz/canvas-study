@@ -3,6 +3,11 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.4.3 (2026-11-25)
+
+- **Clickable deadlines:** "What's due this week?" now links each assignment to its Canvas page more reliably, also
+  when Claude answers without the plugin's skill (on Haiku, 80% of listed assignments instead of 59%).
+
 ## 0.4.2 (2026-11-25)
 
 - **Simpler code, same behavior:** the leftovers of the LanceDB and llama-index days are gone, and course syncing
