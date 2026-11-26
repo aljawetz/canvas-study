@@ -36,7 +36,9 @@ Call `list_courses`. If its note says there is no Canvas token, or that the toke
 student through it:
 
 1. In Canvas: Account > Settings > Approved Integrations > **+ New Access Token**. Purpose: "Canvas Study".
-   Copy the token.
+   Copy the token. If the button isn't there, their school doesn't let students create tokens: say so plainly,
+   suggest asking the school's IT help desk for one (some schools give them on request), and stop. Without a
+   token Canvas Study can't connect.
 2. In Claude Code: `/plugin` > Installed > canvas-study > **Configure options**, paste it as the Canvas access
    token (and change the Canvas URL if their school isn't canvas.cmu.edu).
 3. Run `/reload-plugins`, then `/canvas-study:setup` again.

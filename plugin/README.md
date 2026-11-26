@@ -44,8 +44,8 @@ Works on macOS, Linux and Windows (on Windows it needs [Git for Windows](https:/
 
 **Never**
 
-- It calls no AI service. Your questions and course content stay between you, Claude Code and your own Claude
-  account.
+- It calls no AI service itself. What Claude reads to answer you (course text, deadlines, grades, teacher
+  feedback) goes to Anthropic as part of your Claude Code conversation, under your own account's data settings.
 - It sends no analytics or telemetry.
 
 ## Your data
