@@ -3,6 +3,7 @@
 A Claude Code plugin that lets you ask Claude about your Canvas courses:
 
 - **What's due:** deadlines, submission status, scores and rubrics, read live from Canvas and shown in your time zone.
+- **Teacher feedback:** what your professor or TA wrote on your submissions, including on work graded weeks ago.
 - **Your grades:** your course total as Canvas computes it, and how much each category (labs, exams) is worth.
 - **What the course says:** answers from your slides, readings, syllabus and Canvas pages, each fact linked to the Canvas page it came from.
 - **Help studying:** explanations grounded in your own course material. It won't write your graded work for you.
