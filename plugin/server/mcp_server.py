@@ -484,7 +484,8 @@ def build_server(home: Path | None = None, searcher: Searcher | None = None, cou
         assignment_id: that one assignment's description, rubric, submission, score and the teacher's comments
         on the submission. A very long description comes with description_cut; pass its description_offset to
         read the rest. with_feedback: every assignment the teacher commented on, any date, with the comments:
-        for what a professor or TA said about the student's work."""
+        for what a professor or TA said about the student's work. Each assignment comes with link, a markdown
+        link to it on Canvas: write the assignment as that link when you list it."""
         return list_assignments_result(home, course_id, assignments_for, days, only_unsubmitted, assignment_id,
                                        zone_for, description_offset, with_feedback)
 

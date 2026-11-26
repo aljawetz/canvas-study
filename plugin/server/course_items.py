@@ -19,6 +19,8 @@ import re
 import sqlite3
 from pathlib import Path
 
+import citation_links
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS outline (
   position  INTEGER PRIMARY KEY,
@@ -157,10 +159,7 @@ def _matches(rows: list[dict], topic: str) -> list[dict]:
 
 def _item_line(row: dict) -> str:
     """A markdown link to the item when its link is known, ready to cite."""
-    if not row["url"]:
-        return f"- {row['title']} ({row['item_type']})"
-    title = row["title"].replace("[", "\\[").replace("]", "\\]")
-    return f"- [{title}]({row['url']}) ({row['item_type']})"
+    return f"- {citation_links.markdown_link(row['title'], row['url'])} ({row['item_type']})"
 
 
 def format_listing(rows: list[dict], topic: str = "", types: list[str] | None = None) -> str:

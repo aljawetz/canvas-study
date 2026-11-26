@@ -92,6 +92,15 @@ def test_upcoming_clamps_days_and_caps_rows():
     assert assignments.upcoming(raw, days=0, now=NOW)["days"] == 1
 
 
+def test_every_row_has_a_markdown_link_to_cite():
+    raw = [_a(1, "Lab [2]: Doubles", NOW + timedelta(days=1), UNSUBMITTED), _a(2, "No link", NOW + timedelta(days=2), UNSUBMITTED, html_url=None)]
+
+    rows = assignments.upcoming(raw, days=7, now=NOW)["assignments"]
+
+    assert rows[0]["link"] == "[Lab \\[2\\]: Doubles](https://canvas.example.edu/courses/1/assignments/1)"
+    assert rows[1]["link"] == "No link"
+
+
 def test_scores_are_shown_for_graded_work():
     raw = [_a(1, "Lab 2", NOW - timedelta(days=1), GRADED)]
 
