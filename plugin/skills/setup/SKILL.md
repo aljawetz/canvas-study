@@ -19,7 +19,7 @@ CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" "${CLAUDE_PLUGIN_ROOT}/scripts/server
 
 The first time, it downloads the server's packages and Python (about 85 MB) and the search model (about 130 MB), and
 `uv` if the computer has none, so tell the student it can take a minute or two on a good connection, longer on a
-slow one, and uses about 500 MB of disk. Later runs finish in seconds. If it
+slow one, and uses about 700 MB of disk. Later runs finish in seconds. If it
 fails, show the last few lines of its output and stop; a network error usually means trying again later. On
 Windows, if Bash itself isn't available, the student needs Git for Windows (https://git-scm.com/downloads/win):
 Claude Code uses its shell to run the server. Ask them to install it, restart Claude Code and run setup again.

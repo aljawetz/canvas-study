@@ -21,7 +21,8 @@ def _run(tmp_path, **env):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     uvx = bin_dir / "uvx"
-    uvx.write_text('#!/bin/sh\necho "SM_MODELS_DIR=$SM_MODELS_DIR"\n')
+    uvx.write_text('#!/bin/sh\necho "SM_MODELS_DIR=$SM_MODELS_DIR"\necho "UV_CACHE_DIR=$UV_CACHE_DIR"\n'
+                   'echo "UV_PYTHON_INSTALL_DIR=$UV_PYTHON_INSTALL_DIR"\n')
     uvx.chmod(uvx.stat().st_mode | stat.S_IEXEC)
     base = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path / "home")}
     out = subprocess.run(["sh", str(LAUNCHER), "--version"], env={**base, **env}, capture_output=True, text=True,
@@ -35,6 +36,15 @@ def test_the_model_goes_in_the_plugins_data_folder_when_nothing_else_says(tmp_pa
     model landed inside uv's package cache and the server downloaded it again."""
     data = tmp_path / "data"
     assert _run(tmp_path, CLAUDE_PLUGIN_DATA=str(data))["SM_MODELS_DIR"] == f"{data}/models"
+
+
+def test_everything_uv_downloads_stays_in_the_data_folder(tmp_path):
+    """Uninstalling deletes the data folder; uv's cache and Python used to stay
+    behind in ~/.cache/uv and ~/.local/share/uv (~600 MB on a fresh install)."""
+    data = tmp_path / "data"
+    env = _run(tmp_path, CLAUDE_PLUGIN_DATA=str(data))
+    assert env["UV_CACHE_DIR"] == f"{data}/uv-cache"
+    assert env["UV_PYTHON_INSTALL_DIR"] == f"{data}/python"
 
 
 def test_an_explicit_models_folder_wins(tmp_path):

@@ -19,6 +19,10 @@ UV_DIR="$DATA/uv"
 # skill's download (run from Claude's shell, which has no .mcp.json env) gets
 # the same folder from the data folder, so the model is downloaded once.
 export SM_MODELS_DIR="${SM_MODELS_DIR:-$DATA/models}"
+# uv's package cache and the Python it installs live in the data folder too, so
+# uninstalling the plugin (which deletes that folder) removes everything it
+# downloaded. Otherwise ~600 MB stays behind in ~/.cache/uv and ~/.local/share/uv.
+export UV_CACHE_DIR="$DATA/uv-cache" UV_PYTHON_INSTALL_DIR="$DATA/python"
 
 find_uvx() {
   for candidate in "$(command -v uvx 2>/dev/null || true)" "$HOME/.local/bin/uvx" "$HOME/.cargo/bin/uvx" "$UV_DIR/uvx" \

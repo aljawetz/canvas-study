@@ -36,8 +36,8 @@ Then run:
 /canvas-study:setup
 ```
 
-Setup downloads what it needs the first time (about 215 MB, and about 500 MB on disk once installed: the search
-model and its runtime, the document readers, and Python), lets you pick your courses and indexes them. Then ask away: "What's due this week?", "What does the syllabus say about late work?"
+Setup downloads what it needs the first time (about 215 MB, and about 700 MB on disk once installed: the search
+model and its runtime, the document readers, and Python, all in the plugin's data folder), lets you pick your courses and indexes them. Then ask away: "What's due this week?", "What does the syllabus say about late work?"
 
 Works on macOS, Linux and Windows. On Windows, install [Git for Windows](https://git-scm.com/downloads/win) first: Claude Code
 uses its shell to start the plugin (and for its own Bash tool).
@@ -57,7 +57,7 @@ Your token and your course index stay on your computer. What you ask about goes 
 
 The full list of what it runs, sends and fetches is in [plugin/README.md](plugin/README.md).
 
-Uninstalling the plugin deletes its data folder.
+Uninstalling the plugin deletes its data folder, and with it everything the plugin downloaded.
 
 ## How it works
 
