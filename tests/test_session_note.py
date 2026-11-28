@@ -64,3 +64,16 @@ def test_the_hook_says_nothing_when_indexed_but_without_a_note(tmp_path):
 def test_the_hook_points_to_setup_before_anything_is_indexed(tmp_path):
     out = json.loads(_hook(tmp_path))
     assert "isn't set up yet" in out["systemMessage"]
+
+
+def test_both_notes_say_reconnect_not_restart(tmp_path):
+    """After a failed start, new sessions skip a plugin's server for ~15 minutes
+    while /mcp reconnect all works at once (checked in a real session). Without
+    this line, Claude told the student to restart in 6 of 6 runs."""
+    session_note.remember_names(tmp_path / "set-up", {1: "Software Testing"})
+    (tmp_path / "set-up" / "index.db").touch()
+    session_note.write_note(tmp_path / "set-up", [1])
+    for home in (tmp_path / "set-up", tmp_path / "new"):
+        home.mkdir(exist_ok=True)
+        context = json.loads(_hook(home))["hookSpecificOutput"]["additionalContext"]
+        assert "/mcp reconnect all" in context and "not" in context.split("/mcp reconnect all")[1][:40]
