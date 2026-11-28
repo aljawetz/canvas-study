@@ -5,7 +5,7 @@ stubs here — this tests course_sync.py's own branching logic
 (new/changed/deleted/failed), not Canvas's real API shape or real
 extraction/embedding, which their own test suites already cover. The
 real end-to-end check against live Canvas is running
-/canvas-study:setup on a real course (./plugin/dev.sh).
+/canvas-context:setup on a real course (./plugin/dev.sh).
 """
 
 import pytest
@@ -37,10 +37,10 @@ def _structure(*metas):
     return [{"items": [{"type": "File", "content_id": m["id"]} for m in metas]}]
 
 
-def _manifest_ids(sm_home, course_id=1):
+def _manifest_ids(data_home, course_id=1):
     """Reads the real manifest.db the sync just wrote — deletion guards are
     about what survives on disk, not only about the emitted counts."""
-    conn = course_sync.sync.open_manifest(sm_home / "courses" / str(course_id) / "manifest.db")
+    conn = course_sync.sync.open_manifest(data_home / "courses" / str(course_id) / "manifest.db")
     try:
         return {row[0] for row in conn.execute("SELECT canvas_item_id FROM manifest").fetchall()}
     finally:
@@ -104,8 +104,8 @@ def stub_extraction(monkeypatch):
     return calls
 
 
-def run(course_id, sm_home):
-    return list(course_sync.sync_course(course_id, sm_home))
+def run(course_id, data_home):
+    return list(course_sync.sync_course(course_id, data_home))
 
 
 def test_first_sync_reports_one_new_file_and_one_new_page(tmp_path, stub_canvas, stub_extraction):
@@ -121,8 +121,8 @@ def test_second_sync_with_no_remote_changes_reports_nothing(tmp_path, stub_canva
     assert events == [{"done": True, "new": 0, "changed": 0, "removed": 0, "failed": 0}]
 
 
-def _stamp(sm_home, course_id=1):
-    conn = course_sync.sync.open_manifest(sm_home / "courses" / str(course_id) / "manifest.db")
+def _stamp(data_home, course_id=1):
+    conn = course_sync.sync.open_manifest(data_home / "courses" / str(course_id) / "manifest.db")
     try:
         return course_sync.sync.index_format(conn)
     finally:
@@ -619,8 +619,8 @@ def test_an_assignment_with_a_due_date_but_no_description_is_indexed(tmp_path, s
     assert _manifest_ids(tmp_path) == {"assignment:1"}
 
 
-def _outline_titles(sm_home, course_id=1):
-    conn = course_sync.sync.open_manifest(sm_home / "courses" / str(course_id) / "manifest.db")
+def _outline_titles(data_home, course_id=1):
+    conn = course_sync.sync.open_manifest(data_home / "courses" / str(course_id) / "manifest.db")
     try:
         return [row["title"] for row in course_sync.course_items.load_outline(conn)]
     finally:

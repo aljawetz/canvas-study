@@ -16,7 +16,7 @@ import json
 import logging
 from pathlib import Path
 
-logger = logging.getLogger("canvas-study")
+logger = logging.getLogger("canvas-context")
 
 NAMES_FILE = "course_names.json"
 NOTE_FILE = "session_start.json"
@@ -38,10 +38,10 @@ def remember_names(home: Path, names: dict[int, str]) -> None:
 def note_text(names: list[str]) -> str:
     listed = "; ".join(names)
     return (
-        f"The student's courses indexed by Canvas Study: {listed}. A question about one of these courses, "
+        f"The student's courses indexed by Canvas Context: {listed}. A question about one of these courses, "
         "including a concept or topic it teaches, is a question about their Canvas course: use the "
-        "canvas-study:answering-course-questions skill and answer from their course material, not from general knowledge. "
-        "If the Canvas Study tools are missing or its server failed to connect, tell the student to run "
+        "canvas-context:answering-course-questions skill and answer from their course material, not from general knowledge. "
+        "If the Canvas Context tools are missing or its server failed to connect, tell the student to run "
         "/mcp reconnect all, not to restart Claude Code: after a failed start, new sessions skip the server for "
         "about 15 minutes, while reconnecting works right away."
     )

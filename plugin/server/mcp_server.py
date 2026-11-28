@@ -1,4 +1,4 @@
-"""MCP server for the Canvas Study Claude Code plugin.
+"""MCP server for the Canvas Context Claude Code plugin.
 
 Claude Code is the LLM. This server only reads Canvas and searches: no tool
 here calls a model. Its tools:
@@ -20,7 +20,7 @@ last sync finished over REFRESH_AFTER ago starts an incremental sync in the
 background and answers from the index as it is, saying so. Only courses the
 student already chose to index; a new course still needs sync_course.
 
-Data lives in SM_HOME, the plugin's data folder (.mcp.json sets it). Models
+Data lives in CANVAS_CONTEXT_HOME, the plugin's data folder (.mcp.json sets it). Models
 load on the first search, not at startup, so a session that never asks about
 a course costs almost nothing.
 
@@ -52,7 +52,7 @@ import session_note
 import sync
 import sync_jobs
 
-logger = logging.getLogger("canvas-study")
+logger = logging.getLogger("canvas-context")
 
 DEFAULT_K = 5
 MAX_K = 10
@@ -62,7 +62,7 @@ SNIPPET_CHARS = 4000
 NO_RESULTS = "No matching course material found for this search."
 
 INSTRUCTIONS = (
-    "Canvas Study answers from the student's own Canvas courses. What the material says (slides, readings, "
+    "Canvas Context answers from the student's own Canvas courses. What the material says (slides, readings, "
     "syllabus, pages): call search_course_material before answering. Deadlines, what is due, submission "
     "status, scores, rubrics and teacher feedback: call list_assignments, which reads Canvas live. The "
     "student's overall grade, or how much a category (exams, homework) is worth: call get_grades. Complete lists of what a course has "
@@ -75,8 +75,8 @@ INSTRUCTIONS = (
 )
 
 
-def sm_home() -> Path:
-    return Path(os.environ.get("SM_HOME", str(Path.home() / ".canvas-study")))
+def data_home() -> Path:
+    return Path(os.environ.get("CANVAS_CONTEXT_HOME", str(Path.home() / ".canvas-context")))
 
 
 def _table(course_id: int) -> str:
@@ -132,9 +132,9 @@ def rebuild_outdated(home: Path, jobs: "sync_jobs.SyncJobs") -> None:
         jobs.start(course_id)
 
 
-PARTIAL = ("This course is being re-indexed after a Canvas Study update, so these results may be missing items "
+PARTIAL = ("This course is being re-indexed after a Canvas Context update, so these results may be missing items "
            "that aren't back in the index yet.")
-REBUILDING = ("Course {cid} is being re-indexed after a Canvas Study update{progress}, so it can't be searched for a "
+REBUILDING = ("Course {cid} is being re-indexed after a Canvas Context update{progress}, so it can't be searched for a "
               "few minutes. Its deadlines, grades and feedback (list_assignments, get_grades) work meanwhile.")
 
 
@@ -259,10 +259,10 @@ def _searcher_factory(home: Path):
 
 
 def _log_query(course_id: int, query: str, results: list[dict], seconds: float) -> None:
-    """With SM_QUERY_LOG set, append each search as one JSON line: what
+    """With CANVAS_CONTEXT_QUERY_LOG set, append each search as one JSON line: what
     Claude asked and what came back, for scoring retrieval and latency. It
     holds course text, so it is never committed."""
-    path = os.environ.get("SM_QUERY_LOG")
+    path = os.environ.get("CANVAS_CONTEXT_QUERY_LOG")
     if not path:
         return
     entry = {
@@ -354,9 +354,9 @@ def _canvas_failure(error: Exception) -> str:
     """Why Canvas gave nothing, in words the student can act on."""
     if isinstance(error, httpx.HTTPStatusError) and error.response.status_code == 401:
         return ("Your Canvas token doesn't work (make a new one in Canvas and paste it in /plugin > Installed > "
-                "canvas-study > Configure options, then run /reload-plugins)")
+                "canvas-context > Configure options, then run /reload-plugins)")
     if isinstance(error, canvas.CanvasError):
-        return "No Canvas token is set up (run /canvas-study:setup)"
+        return "No Canvas token is set up (run /canvas-context:setup)"
     return "Canvas could not be reached"
 
 
@@ -429,7 +429,7 @@ def build_server(home: Path | None = None, searcher: Searcher | None = None, cou
                  assignments_for=canvas.list_assignments, zone_for=None, jobs=None,
                  course_grades_for=canvas.get_course_grades, groups_for=canvas.list_assignment_groups,
                  rebuild_on_start: bool = False) -> MCPServer:
-    home = home or sm_home()
+    home = home or data_home()
     searcher = searcher or Searcher(home)
     def synced(course_id: int) -> None:
         searcher.forget(course_id)
@@ -439,7 +439,7 @@ def build_server(home: Path | None = None, searcher: Searcher | None = None, cou
     if rebuild_on_start:
         rebuild_outdated(home, jobs)
     zone_for = zone_for or canvas_zone()
-    server = MCPServer("canvas-study", instructions=INSTRUCTIONS)
+    server = MCPServer("canvas-context", instructions=INSTRUCTIONS)
 
     # Tools return dicts, not JSON strings: a str result reaches Claude
     # wrapped as {"result": "<escaped JSON>"}, seen in the first live run.
@@ -520,7 +520,7 @@ def main() -> None:
         from importlib.metadata import PackageNotFoundError, version
 
         try:
-            print(version("canvas-study-mcp"))
+            print(version("canvas-context-mcp"))
         except PackageNotFoundError:
             print("dev")
         return
@@ -533,7 +533,7 @@ def main() -> None:
     # httpx logs each request URL at INFO, and Canvas file downloads carry
     # signed tokens in theirs; Claude Code keeps the server's stderr in its logs.
     logging.getLogger("httpx").setLevel(logging.WARNING)
-    build_server(sm_home(), rebuild_on_start=True).run("stdio")
+    build_server(data_home(), rebuild_on_start=True).run("stdio")
 
 
 if __name__ == "__main__":

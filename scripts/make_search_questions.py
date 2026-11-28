@@ -8,7 +8,7 @@ twice) are accepted too, so finding the copy isn't scored as a miss.
 
 The output holds real course content: keep it outside the repo.
 
-    uv run python scripts/make_search_questions.py --home <plugin data folder> --out ~/.canvas-study-bench/questions.jsonl
+    uv run python scripts/make_search_questions.py --home <plugin data folder> --out ~/.canvas-context-bench/questions.jsonl
 """
 
 import argparse

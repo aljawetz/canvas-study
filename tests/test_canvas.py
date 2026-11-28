@@ -21,9 +21,9 @@ def load(name: str) -> dict:
 
 @pytest.fixture(autouse=True)
 def fake_settings(monkeypatch):
-    # No SM_CANVAS_URL, so _api_base() is CANVAS_API_URL (BASE above).
-    monkeypatch.setenv("SM_CANVAS_TOKEN", "fake-token-for-tests")
-    monkeypatch.delenv("SM_CANVAS_URL", raising=False)
+    # No CANVAS_CONTEXT_URL, so _api_base() is CANVAS_API_URL (BASE above).
+    monkeypatch.setenv("CANVAS_CONTEXT_TOKEN", "fake-token-for-tests")
+    monkeypatch.delenv("CANVAS_CONTEXT_URL", raising=False)
 
 
 @respx.mock
@@ -66,7 +66,7 @@ def test_course_structure_403_degrades_to_empty():
 @respx.mock
 def test_configured_base_url_is_used_instead_of_default(monkeypatch):
     """A school other than CMU must actually be reachable."""
-    monkeypatch.setenv("SM_CANVAS_URL", "https://canvas.instructure.com")
+    monkeypatch.setenv("CANVAS_CONTEXT_URL", "https://canvas.instructure.com")
     fx = load("courses")
     respx.get("https://canvas.instructure.com/api/v1/courses").mock(
         return_value=httpx.Response(fx["status"], json=fx["body"])
@@ -189,14 +189,14 @@ def test_download_raises_on_an_error_status_instead_of_returning_the_error_page(
 
 
 def test_missing_token_is_a_canvas_error(monkeypatch):
-    monkeypatch.setenv("SM_CANVAS_TOKEN", "")
+    monkeypatch.setenv("CANVAS_CONTEXT_TOKEN", "")
 
     with pytest.raises(canvas.CanvasError):
         canvas._token()
 
 
 def test_plugin_url_is_normalized(monkeypatch):
-    monkeypatch.setenv("SM_CANVAS_URL", "canvas.example.edu/api/v1/")
+    monkeypatch.setenv("CANVAS_CONTEXT_URL", "canvas.example.edu/api/v1/")
 
     assert canvas._api_base() == "https://canvas.example.edu/api/v1"
 
@@ -216,7 +216,7 @@ def test_normalize_base_url(raw, origin):
 
 
 def test_empty_url_setting_means_the_default(monkeypatch):
-    monkeypatch.setenv("SM_CANVAS_URL", "")
+    monkeypatch.setenv("CANVAS_CONTEXT_URL", "")
 
     assert canvas.origin() == canvas.DEFAULT_ORIGIN
 

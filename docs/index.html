@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Canvas Study: your Canvas courses in Claude Code</title>
+<title>Canvas Context: your Canvas courses in Claude Code</title>
 <meta name="description" content="A Claude Code plugin that answers from your own Canvas courses: deadlines, grades, slides, readings and syllabus, each fact linked to its Canvas page. Free, open source, runs on your computer.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -336,14 +336,14 @@ footer { border-top: 1px solid var(--line); background: var(--card); padding: 64
 
 <header class="nav" id="nav">
   <div class="nav-in">
-    <a class="brand" href="#top" aria-label="Canvas Study home">
+    <a class="brand" href="#top" aria-label="Canvas Context home">
       <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--ink)"/><rect x="8" y="7" width="16" height="18" rx="2" fill="var(--bg)"/><path d="M18 7h4v9l-2-1.6-2 1.6z" fill="var(--green)"/></svg>
-      <span>Canvas Study</span><span class="sep">/</span><span class="brand-sub">for Claude Code</span>
+      <span>Canvas Context</span><span class="sep">/</span><span class="brand-sub">for Claude Code</span>
     </a>
     <nav class="nav-links" aria-label="Main">
       <a class="hide-m" href="#how">How it works</a>
       <a class="hide-m" href="#privacy">Privacy</a>
-      <a class="gh hide-m" href="https://github.com/aljawetz/canvas-study">
+      <a class="gh hide-m" href="https://github.com/aljawetz/canvas-context">
         <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
         Open source
       </a>
@@ -558,12 +558,12 @@ footer { border-top: 1px solid var(--line); background: var(--card); padding: 64
     <div class="wrap">
       <h2 class="reveal">Give Claude<span class="g">your whole semester.</span></h2>
       <div class="term">
-        <div class="tl reveal"><span class="pr">&gt;</span><span class="cmd" data-copy="/plugin install canvas-study --marketplace aljawetz/canvas-study">/plugin install canvas-study <span class="c">--marketplace</span> <span class="hl">aljawetz/canvas-study</span></span><button class="copy" type="button" aria-label="Copy install command">copy</button></div>
-        <div class="tl reveal" style="--d:80ms"><span class="pr">&gt;</span><span class="cmd" data-copy="/canvas-study:setup">/canvas-study:setup</span><button class="copy" type="button" aria-label="Copy setup command">copy</button></div>
+        <div class="tl reveal"><span class="pr">&gt;</span><span class="cmd" data-copy="/plugin install canvas-context --marketplace aljawetz/canvas-context">/plugin install canvas-context <span class="c">--marketplace</span> <span class="hl">aljawetz/canvas-context</span></span><button class="copy" type="button" aria-label="Copy install command">copy</button></div>
+        <div class="tl reveal" style="--d:80ms"><span class="pr">&gt;</span><span class="cmd" data-copy="/canvas-context:setup">/canvas-context:setup</span><button class="copy" type="button" aria-label="Copy setup command">copy</button></div>
         <div class="tl reveal" style="--d:160ms"><span class="pr">&gt;</span><span class="cmd" data-copy="what's due this week, and what does the syllabus say about late work?">what's due this week, and what does the syllabus say about late work?<span class="caret" aria-hidden="true"></span></span><button class="copy" type="button" aria-label="Copy example question">copy</button></div>
       </div>
       <p class="term-note reveal">Run these in Claude Code 2.1.275 or later. You'll need a Canvas access token: <code>Account › Settings › Approved Integrations › + New Access Token</code></p>
-      <div class="ctas reveal"><a class="btn" href="https://github.com/aljawetz/canvas-study">View on GitHub</a></div>
+      <div class="ctas reveal"><a class="btn" href="https://github.com/aljawetz/canvas-context">View on GitHub</a></div>
     </div>
   </section>
 
@@ -587,28 +587,28 @@ footer { border-top: 1px solid var(--line); background: var(--card); padding: 64
       <div>
         <div class="brand">
           <svg width="26" height="26" viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="var(--ink)"/><rect x="8" y="7" width="16" height="18" rx="2" fill="var(--bg)"/><path d="M18 7h4v9l-2-1.6-2 1.6z" fill="var(--green)"/></svg>
-          Canvas Study
+          Canvas Context
         </div>
         <p>Unofficial. Not made by or affiliated with Instructure, the maker of Canvas.</p>
       </div>
       <div>
         <h4>Project</h4>
         <ul>
-          <li><a href="https://github.com/aljawetz/canvas-study">GitHub</a></li>
-          <li><a href="https://github.com/aljawetz/canvas-study/blob/main/CHANGELOG.md">Changelog</a></li>
-          <li><a href="https://github.com/aljawetz/canvas-study/issues">Report an issue</a></li>
+          <li><a href="https://github.com/aljawetz/canvas-context">GitHub</a></li>
+          <li><a href="https://github.com/aljawetz/canvas-context/blob/main/CHANGELOG.md">Changelog</a></li>
+          <li><a href="https://github.com/aljawetz/canvas-context/issues">Report an issue</a></li>
         </ul>
       </div>
       <div>
         <h4>Details</h4>
         <ul>
-          <li><a href="https://github.com/aljawetz/canvas-study/blob/main/plugin/README.md">What it runs and sends</a></li>
-          <li><a href="https://github.com/aljawetz/canvas-study/blob/main/LICENSE">MIT license</a></li>
+          <li><a href="https://github.com/aljawetz/canvas-context/blob/main/plugin/README.md">What it runs and sends</a></li>
+          <li><a href="https://github.com/aljawetz/canvas-context/blob/main/LICENSE">MIT license</a></li>
           <li><a href="#install">Install</a></li>
         </ul>
       </div>
     </div>
-    <div class="legal"><span>© 2026 Canvas Study</span><span>Made for students, with Claude Code</span></div>
+    <div class="legal"><span>© 2026 Canvas Context</span><span>Made for students, with Claude Code</span></div>
   </div>
 </footer>
 

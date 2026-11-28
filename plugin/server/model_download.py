@@ -98,7 +98,7 @@ def _print_progress(name: str, done: int, total: int | None) -> None:
 
 
 def main() -> None:
-    """--download-model: what /canvas-study:setup runs."""
+    """--download-model: what /canvas-context:setup runs."""
     if model_ready():
         print(f"Embedding model already in {embeddings.MODEL_DIR}", file=sys.stderr)
         return

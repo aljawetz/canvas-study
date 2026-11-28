@@ -21,7 +21,7 @@ def _run(tmp_path, **env):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     uvx = bin_dir / "uvx"
-    uvx.write_text('#!/bin/sh\necho "SM_MODELS_DIR=$SM_MODELS_DIR"\necho "UV_CACHE_DIR=$UV_CACHE_DIR"\n'
+    uvx.write_text('#!/bin/sh\necho "CANVAS_CONTEXT_MODELS_DIR=$CANVAS_CONTEXT_MODELS_DIR"\necho "UV_CACHE_DIR=$UV_CACHE_DIR"\n'
                    'echo "UV_PYTHON_INSTALL_DIR=$UV_PYTHON_INSTALL_DIR"\n')
     uvx.chmod(uvx.stat().st_mode | stat.S_IEXEC)
     base = {"PATH": f"{bin_dir}:/usr/bin:/bin", "HOME": str(tmp_path / "home")}
@@ -32,10 +32,10 @@ def _run(tmp_path, **env):
 
 def test_the_model_goes_in_the_plugins_data_folder_when_nothing_else_says(tmp_path):
     """Claude's shell, where setup downloads the model, has CLAUDE_PLUGIN_DATA
-    (passed by the skill) but not .mcp.json's SM_MODELS_DIR. Before this, the
+    (passed by the skill) but not .mcp.json's CANVAS_CONTEXT_MODELS_DIR. Before this, the
     model landed inside uv's package cache and the server downloaded it again."""
     data = tmp_path / "data"
-    assert _run(tmp_path, CLAUDE_PLUGIN_DATA=str(data))["SM_MODELS_DIR"] == f"{data}/models"
+    assert _run(tmp_path, CLAUDE_PLUGIN_DATA=str(data))["CANVAS_CONTEXT_MODELS_DIR"] == f"{data}/models"
 
 
 def test_everything_uv_downloads_stays_in_the_data_folder(tmp_path):
@@ -49,7 +49,7 @@ def test_everything_uv_downloads_stays_in_the_data_folder(tmp_path):
 
 def test_an_explicit_models_folder_wins(tmp_path):
     assert _run(tmp_path, CLAUDE_PLUGIN_DATA=str(tmp_path / "data"),
-                SM_MODELS_DIR="/somewhere/else")["SM_MODELS_DIR"] == "/somewhere/else"
+                CANVAS_CONTEXT_MODELS_DIR="/somewhere/else")["CANVAS_CONTEXT_MODELS_DIR"] == "/somewhere/else"
 
 
 def test_setup_passes_the_plugins_data_folder_to_its_download():

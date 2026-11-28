@@ -145,7 +145,7 @@ def test_sync_course_without_a_token_says_how_to_fix_it(tmp_path):
     out = mcp_server.sync_course_result(jobs, COURSE, token_check=no_token)
 
     assert out["started"] is False
-    assert out["error"] == "No Canvas token is set up (run /canvas-study:setup)"
+    assert out["error"] == "No Canvas token is set up (run /canvas-context:setup)"
 
 
 def test_sync_status_for_one_course_or_all(tmp_path):

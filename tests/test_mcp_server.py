@@ -33,7 +33,7 @@ SERVER = Path(__file__).resolve().parent.parent / "plugin" / "server"
 def no_canvas_token(monkeypatch):
     """A search refreshes a stale course from Canvas when a token is set; a
     dev's own token must never send these tests to live Canvas."""
-    monkeypatch.delenv("SM_CANVAS_TOKEN", raising=False)
+    monkeypatch.delenv("CANVAS_CONTEXT_TOKEN", raising=False)
 
 
 COURSE = 55016
@@ -142,7 +142,7 @@ def test_tools_and_instructions_are_listed():
 def test_list_course_items_lists_the_saved_outline_with_a_modules_link(tmp_path, monkeypatch):
     import course_items
 
-    monkeypatch.setenv("SM_CANVAS_URL", "https://canvas.example.edu")
+    monkeypatch.setenv("CANVAS_CONTEXT_URL", "https://canvas.example.edu")
     (tmp_path / "courses" / "7").mkdir(parents=True)
     conn = sync.open_manifest(tmp_path / "courses" / "7" / "manifest.db")
     course_items.save_outline(conn, [
@@ -216,8 +216,8 @@ def test_query_log_records_each_search_when_set(tmp_path, monkeypatch):
     searcher, _ = _searcher(tmp_path, index)
     log = tmp_path / "queries.jsonl"
 
-    searcher.search(COURSE, "late work")  # not logged: SM_QUERY_LOG unset
-    monkeypatch.setenv("SM_QUERY_LOG", str(log))
+    searcher.search(COURSE, "late work")  # not logged: CANVAS_CONTEXT_QUERY_LOG unset
+    monkeypatch.setenv("CANVAS_CONTEXT_QUERY_LOG", str(log))
     searcher.search(COURSE, "late work penalty")
     searcher.search(COURSE, "team size")
 
@@ -239,7 +239,7 @@ def test_search_on_a_course_with_no_index_says_so(tmp_path):
 
 def test_query_log_records_a_search_on_a_course_with_no_index(tmp_path, monkeypatch):
     log = tmp_path / "queries.jsonl"
-    monkeypatch.setenv("SM_QUERY_LOG", str(log))
+    monkeypatch.setenv("CANVAS_CONTEXT_QUERY_LOG", str(log))
     searcher = mcp_server.Searcher(tmp_path, make_searcher=lambda cid: pytest.fail("must not open an index"))
 
     searcher.search(999, "anything")
@@ -322,7 +322,7 @@ def test_stdio_subprocess_speaks_only_protocol_on_stdout(tmp_path, caplog):
         command=sys.executable,
         args=[str(SERVER / "mcp_server.py")],
         # A closed local port: list_courses falls back without reaching a real Canvas.
-        env={**os.environ, "SM_HOME": str(tmp_path), "SM_CANVAS_TOKEN": "x", "SM_CANVAS_URL": "http://127.0.0.1:9"},
+        env={**os.environ, "CANVAS_CONTEXT_HOME": str(tmp_path), "CANVAS_CONTEXT_TOKEN": "x", "CANVAS_CONTEXT_URL": "http://127.0.0.1:9"},
         cwd=str(SERVER),
     )
 
@@ -474,7 +474,7 @@ def test_zone_falls_back_to_the_machine_when_canvas_fails(monkeypatch):
 
 
 def test_search_results_link_to_their_canvas_page(tmp_path, monkeypatch):
-    monkeypatch.setenv("SM_CANVAS_URL", "https://canvas.example.edu")
+    monkeypatch.setenv("CANVAS_CONTEXT_URL", "https://canvas.example.edu")
     table = _add(tmp_path, [indexing.Chunk("Late work loses ten percent per day.",
                                           {"source": "syllabus", "item_type": "syllabus", "page": None, "slide": None},
                                           f"syllabus:{COURSE}")])
@@ -577,7 +577,7 @@ def test_no_refresh_without_an_index_or_a_token(tmp_path):
 
 def test_search_says_when_the_course_is_refreshing(tmp_path, monkeypatch):
     index = _build_index(tmp_path)
-    monkeypatch.setenv("SM_CANVAS_TOKEN", "t")
+    monkeypatch.setenv("CANVAS_CONTEXT_TOKEN", "t")
     searcher, _ = _searcher(tmp_path, index)
     jobs = _FakeJobs()
     server = mcp_server.build_server(tmp_path, searcher=searcher, courses_for=list, jobs=jobs)
@@ -606,7 +606,7 @@ def test_list_courses_writes_the_session_note_for_indexed_courses(tmp_path):
 def test_a_finished_sync_rewrites_the_session_note(tmp_path, monkeypatch):
     _build_index(tmp_path)
     mcp_server.session_note.remember_names(tmp_path, {COURSE: "Software Requirements"})
-    monkeypatch.setenv("SM_CANVAS_TOKEN", "t")
+    monkeypatch.setenv("CANVAS_CONTEXT_TOKEN", "t")
     monkeypatch.setattr(mcp_server.sync_jobs, "_default_ensure_model", lambda: None)
     monkeypatch.setattr(mcp_server.sync_jobs, "_default_run",
                         lambda cid, home: iter([{"done": True, "new": 0, "changed": 0, "removed": 0, "failed": 0}]))
@@ -671,7 +671,7 @@ def test_search_on_a_course_being_rebuilt_says_so_and_points_to_live_tools(tmp_p
     out = mcp_server.Searcher(tmp_path, make_searcher=lambda cid: None).search(7, "late policy")
 
     assert out["results"] == []
-    assert "being re-indexed after a Canvas Study update" in out["note"]
+    assert "being re-indexed after a Canvas Context update" in out["note"]
     assert "list_assignments" in out["note"]
     assert "not indexed" not in out["note"]
 

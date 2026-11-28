@@ -55,13 +55,13 @@ wheels = [
 ]
 
 [[package]]
-name = "canvas-study-dev"
+name = "canvas-context-dev"
 version = "0"
 source = { virtual = "." }
 
 [package.dev-dependencies]
 dev = [
-    { name = "canvas-study-mcp" },
+    { name = "canvas-context-mcp" },
     { name = "pytest" },
     { name = "respx" },
 ]
@@ -70,13 +70,13 @@ dev = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "canvas-study-mcp", editable = "plugin/server" },
+    { name = "canvas-context-mcp", editable = "plugin/server" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "respx", specifier = ">=0.22" },
 ]
 
 [[package]]
-name = "canvas-study-mcp"
+name = "canvas-context-mcp"
 source = { editable = "plugin/server" }
 dependencies = [
     { name = "beautifulsoup4" },

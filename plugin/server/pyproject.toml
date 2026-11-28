@@ -1,9 +1,9 @@
 # The plugin's MCP server, run by uvx from this folder (plugin/scripts/server).
 # The modules sit flat next to this file and import each other by name.
 [project]
-name = "canvas-study-mcp"
+name = "canvas-context-mcp"
 dynamic = ["version"]
-description = "Canvas Study for Claude Code: search and deadlines from your own Canvas courses"
+description = "Canvas Context for Claude Code: search and deadlines from your own Canvas courses"
 license = "MIT"
 requires-python = ">=3.13"
 dependencies = [
@@ -24,7 +24,7 @@ dependencies = [
 ]
 
 [project.scripts]
-canvas-study-mcp = "mcp_server:main"
+canvas-context-mcp = "mcp_server:main"
 
 [build-system]
 requires = ["hatchling"]

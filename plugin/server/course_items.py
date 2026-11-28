@@ -198,8 +198,8 @@ def _manifest_rows(conn: sqlite3.Connection) -> list[dict]:
     return [{"module": "", "section": "", "title": _tidy(name), "item_type": kind, "url": ""} for name, kind in cursor]
 
 
-def list_for_course(sm_home: Path, course_id: int, topic: str = "", types: list[str] | None = None) -> str:
-    path = Path(sm_home) / "courses" / str(course_id) / "manifest.db"
+def list_for_course(data_home: Path, course_id: int, topic: str = "", types: list[str] | None = None) -> str:
+    path = Path(data_home) / "courses" / str(course_id) / "manifest.db"
     if not path.exists():
         return "This course hasn't been synced yet, so there's no list of its materials."
     # Read-only: answering a question must never create or change the manifest.

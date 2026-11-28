@@ -17,7 +17,7 @@ def _hook(home: Path) -> str:
     """Runs the hook the way Claude Code does: through sh (Git for Windows' sh
     on Windows, which can't execute a script file directly)."""
     path = os.environ["PATH"] if os.name == "nt" else "/usr/bin:/bin"
-    return subprocess.run([shutil.which("sh", path=path) or "sh", str(HOOK)], env={"SM_HOME": str(home), "PATH": path},
+    return subprocess.run([shutil.which("sh", path=path) or "sh", str(HOOK)], env={"CANVAS_CONTEXT_HOME": str(home), "PATH": path},
                           capture_output=True, text=True, check=True).stdout
 
 
@@ -29,7 +29,7 @@ def test_the_note_names_indexed_courses_only(tmp_path):
     text = note["hookSpecificOutput"]["additionalContext"]
     assert note["hookSpecificOutput"]["hookEventName"] == "SessionStart"
     assert "Software Testing" in text and "Requirements" in text and "Orientation" not in text
-    assert "canvas-study:answering-course-questions" in text
+    assert "canvas-context:answering-course-questions" in text
     assert "systemMessage" not in note  # a hint for Claude, not a banner shown to the student every session
 
 

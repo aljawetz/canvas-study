@@ -1,7 +1,7 @@
 """Direct Canvas REST API client.
 
 Bearer-token auth with the student's own Canvas token and school URL, both
-from the plugin's settings (SM_CANVAS_TOKEN and SM_CANVAS_URL, set by
+from the plugin's settings (CANVAS_CONTEXT_TOKEN and CANVAS_CONTEXT_URL, set by
 .mcp.json; Claude Code keeps the token in the system keychain). Pagination follows the Link response header (RFC 5988) —
 confirmed against a real request before writing this, not assumed.
 
@@ -34,7 +34,7 @@ ERRORS = (CanvasError, httpx.HTTPStatusError, httpx.TransportError)
 
 
 def _token() -> str:
-    token = os.environ.get("SM_CANVAS_TOKEN")
+    token = os.environ.get("CANVAS_CONTEXT_TOKEN")
     if not token:
         raise CanvasError("no Canvas token set in the plugin's settings")
     return token
@@ -67,7 +67,7 @@ def normalize_base_url(raw: str) -> str:
 
 
 def origin() -> str:
-    return normalize_base_url(os.environ.get("SM_CANVAS_URL") or "") or DEFAULT_ORIGIN
+    return normalize_base_url(os.environ.get("CANVAS_CONTEXT_URL") or "") or DEFAULT_ORIGIN
 
 
 def _api_base() -> str:

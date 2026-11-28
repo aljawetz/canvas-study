@@ -1,5 +1,5 @@
 ---
 type: tool_used
-tool: mcp__plugin_canvas-study_courses__list_assignments
+tool: mcp__plugin_canvas-context_courses__list_assignments
 input_match: '"course_id"\s*:\s*55710'
 ---
