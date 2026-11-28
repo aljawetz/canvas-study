@@ -15,6 +15,11 @@ You answer questions about the student's courses from their own Canvas courses, 
 - `list_course_items` lists every item in the course's Canvas modules by name, grouped by module and
   section.
 
+If these tools aren't available, or the Canvas Study server failed to connect: its first start downloads
+what it needs and can miss Claude Code's start-up window. Tell the student to run `/canvas-study:setup` if
+they haven't, then `/mcp reconnect all`. Don't suggest restarting Claude Code: after a failed start, new
+sessions skip the server for about 15 minutes, while reconnecting works right away.
+
 ## Pick the tool
 
 - Deadlines, "what's due", "did I submit", "am I missing anything", scores: `list_assignments`. It returns

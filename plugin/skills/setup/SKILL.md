@@ -27,8 +27,9 @@ Claude Code uses its shell to run the server. Ask them to install it, restart Cl
 ## 2. Make sure the tools are connected
 
 If the Canvas Study tools (`list_courses`, `sync_course`, `sync_status`) are not available in this session, the
-server could not start before step 1 finished. Ask the student to run `/mcp reconnect all` and then
-`/canvas-study:setup` again, and stop here.
+server could not start before step 1 finished. Ask the student to run `/mcp reconnect all` (or open `/mcp`, pick
+canvas-study and choose Reconnect) and then `/canvas-study:setup` again, and stop here. Not a restart: after a
+failed start, new sessions skip the server for about 15 minutes, while reconnecting works right away.
 
 ## 3. Check Canvas
 
