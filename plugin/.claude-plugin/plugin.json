@@ -1,13 +1,13 @@
 {
-  "name": "canvas-study",
-  "displayName": "Canvas Study",
-  "version": "0.4.6",
+  "name": "canvas-context",
+  "displayName": "Canvas Context",
+  "version": "0.5.0",
   "description": "Ask Claude about your Canvas courses: deadlines, grades and course materials, answered from your own courses with links to the Canvas page. Unofficial, not made by Instructure.",
   "author": {
     "name": "Arthur Jawetz"
   },
-  "repository": "https://github.com/aljawetz/canvas-study",
-  "homepage": "https://github.com/aljawetz/canvas-study",
+  "repository": "https://github.com/aljawetz/canvas-context",
+  "homepage": "https://github.com/aljawetz/canvas-context",
   "license": "MIT",
   "keywords": [
     "canvas",

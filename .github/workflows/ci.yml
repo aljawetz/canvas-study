@@ -80,13 +80,13 @@ jobs:
         run: |
           irm https://claude.ai/install.ps1 | iex
           echo "$env:USERPROFILE\.local\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
-      - name: Install the server the way /canvas-study:setup does (step 1)
+      - name: Install the server the way /canvas-context:setup does (step 1)
         # The first start downloads uv, Python and the packages (~30 s here),
         # longer than Claude Code waits for a server to connect; setup runs
         # this first and then asks the student to reconnect.
         shell: bash
         run: |
-          export CLAUDE_PLUGIN_DATA="$(cygpath -m "$USERPROFILE")/.claude/plugins/data/canvas-study-canvas-study"
+          export CLAUDE_PLUGIN_DATA="$(cygpath -m "$USERPROFILE")/.claude/plugins/data/canvas-context-canvas-context"
           ! command -v uvx
           plugin/scripts/server --version
       - name: Install the plugin and check that Claude Code connects to its server
@@ -94,9 +94,9 @@ jobs:
         run: |
           claude --version
           claude plugin marketplace add "$env:GITHUB_WORKSPACE"
-          claude plugin install canvas-study@canvas-study
+          claude plugin install canvas-context@canvas-context
           $out = claude mcp list | Out-String
           Write-Output $out
-          if ($out -notmatch 'plugin:canvas-study:courses:.*Connected') {
+          if ($out -notmatch 'plugin:canvas-context:courses:.*Connected') {
             throw "Claude Code could not start the plugin's server"
           }

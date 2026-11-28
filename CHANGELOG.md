@@ -3,6 +3,14 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.5.0 (2026-11-28)
+
+- **Breaking: Canvas Study is now Canvas Context.** The plugin, its commands and the repo have a new name:
+  install with `/plugin install canvas-context --marketplace aljawetz/canvas-context` and set up with
+  `/canvas-context:setup`. The old plugin doesn't update into the new one: uninstall `canvas-study`, install
+  `canvas-context`, paste your Canvas token again and run setup. The server's environment variables are renamed
+  too (`SM_*` is now `CANVAS_CONTEXT_*`, for example `CANVAS_CONTEXT_HOME`).
+
 ## 0.4.6 (2026-11-27)
 
 - **The right fix when the server didn't start:** if Canvas Study's server misses Claude Code's start-up window
