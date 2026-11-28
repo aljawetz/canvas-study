@@ -3,6 +3,13 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.4.6 (2026-11-27)
+
+- **The right fix when the server didn't start:** if Canvas Study's server misses Claude Code's start-up window
+  (its first start downloads a lot, so this can happen on slow Wi-Fi), Claude now says to run `/mcp reconnect all`
+  instead of restarting Claude Code. After a failed start, Claude Code skips the server in new sessions for about
+  15 minutes, so a restart looked broken; reconnecting works right away.
+
 ## 0.4.5 (2026-11-27)
 
 - **Everything in one folder:** the Python and packages the plugin downloads now live in its data folder, next to
