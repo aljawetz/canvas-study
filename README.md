@@ -1,4 +1,4 @@
-# Canvas Study
+# Canvas Context
 
 A Claude Code plugin that lets you ask Claude about your Canvas courses:
 
@@ -15,14 +15,14 @@ Unofficial. Not made by or affiliated with Instructure, the maker of Canvas.
 In Claude Code (version 2.1.275 or later):
 
 ```text
-/plugin install canvas-study --marketplace aljawetz/canvas-study
+/plugin install canvas-context --marketplace aljawetz/canvas-context
 ```
 
 On an older Claude Code, add the marketplace first, then install:
 
 ```text
-/plugin marketplace add aljawetz/canvas-study
-/plugin install canvas-study@canvas-study
+/plugin marketplace add aljawetz/canvas-context
+/plugin install canvas-context@canvas-context
 ```
 
 Claude Code asks for your Canvas URL (default `https://canvas.cmu.edu`) and a Canvas access token. To make one:
@@ -33,7 +33,7 @@ Study can't connect to your Canvas.
 Then run:
 
 ```text
-/canvas-study:setup
+/canvas-context:setup
 ```
 
 Setup downloads what it needs the first time (about 215 MB, and about 700 MB on disk once installed: the search
@@ -47,7 +47,7 @@ uses its shell to start the plugin (and for its own Bash tool).
 Your token and your course index stay on your computer. What you ask about goes to Claude:
 
 - Your Canvas token is kept in your system keychain by Claude Code.
-- Your course index lives in the plugin's data folder (`~/.claude/plugins/data/canvas-study-canvas-study/`).
+- Your course index lives in the plugin's data folder (`~/.claude/plugins/data/canvas-context-canvas-context/`).
 - When you ask a question, the course text, deadlines, grades and teacher feedback Claude reads to answer it are
   sent to Anthropic as part of your Claude Code conversation, like anything else you show Claude, under your
   account's data settings.
@@ -63,7 +63,7 @@ Uninstalling the plugin deletes its data folder, and with it everything the plug
 
 | Part | What it does |
 | --- | --- |
-| `plugin/skills/setup` | `/canvas-study:setup`: gets the server and model ready, checks the token, syncs the courses you pick |
+| `plugin/skills/setup` | `/canvas-context:setup`: gets the server and model ready, checks the token, syncs the courses you pick |
 | `plugin/skills/answering-course-questions` | Routes course questions to the right tool, cites sources as Canvas links, refuses graded work |
 | `plugin/server` | The MCP server: `list_courses`, `search_course_material`, `list_course_items`, `list_assignments`, `get_grades`, `sync_course`, `sync_status` |
 | `plugin/scripts/server` | Starts the server with `uv` (installed into the plugin's data folder if missing) |
@@ -93,8 +93,8 @@ only update when that version changes.
 To try the real install flow from a checkout, add it as a local marketplace:
 
 ```text
-/plugin marketplace add /path/to/canvas-study
-/plugin install canvas-study@canvas-study
+/plugin marketplace add /path/to/canvas-context
+/plugin install canvas-context@canvas-context
 ```
 
 ## License

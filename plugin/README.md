@@ -1,4 +1,4 @@
-# Canvas Study
+# Canvas Context
 
 Ask Claude about your Canvas courses: what's due, what your slides, readings and syllabus say, and help studying
 the material. Every course fact links back to the Canvas page it came from. It won't write your graded work.
@@ -7,15 +7,15 @@ Unofficial. Not made by or affiliated with Instructure, the maker of Canvas.
 
 ## Setup
 
-In Claude Code (version 2.1.275 or later; on an older one, run `/plugin marketplace add aljawetz/canvas-study` and
-then `/plugin install canvas-study@canvas-study`):
+In Claude Code (version 2.1.275 or later; on an older one, run `/plugin marketplace add aljawetz/canvas-context` and
+then `/plugin install canvas-context@canvas-context`):
 
 ```text
-/plugin install canvas-study --marketplace aljawetz/canvas-study
+/plugin install canvas-context --marketplace aljawetz/canvas-context
 ```
 
 Claude Code then asks for your Canvas URL and a Canvas access token (Canvas > Account >
-Settings > Approved Integrations > **+ New Access Token**). Then run `/canvas-study:setup` and pick your courses.
+Settings > Approved Integrations > **+ New Access Token**). Then run `/canvas-context:setup` and pick your courses.
 
 Works on macOS, Linux and Windows (on Windows it needs [Git for Windows](https://git-scm.com/downloads/win), which Claude Code also uses).
 
@@ -52,9 +52,9 @@ Works on macOS, Linux and Windows (on Windows it needs [Git for Windows](https:/
 
 - The Canvas token is stored in your system keychain by Claude Code, not in a file.
 - Downloaded course material, the search index, the search model, and the Python and packages the server runs on
-  all live in the plugin's data folder, `~/.claude/plugins/data/canvas-study-canvas-study/`. Uninstalling the
+  all live in the plugin's data folder, `~/.claude/plugins/data/canvas-context-canvas-context/`. Uninstalling the
   plugin deletes it.
 
 ## License
 
-MIT. Source: <https://github.com/aljawetz/canvas-study>
+MIT. Source: <https://github.com/aljawetz/canvas-context>
