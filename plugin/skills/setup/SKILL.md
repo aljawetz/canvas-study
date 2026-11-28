@@ -1,9 +1,9 @@
 ---
 name: setup
-description: Set up Canvas Study on this computer, from installing what it needs to connecting Canvas and indexing the student's courses. Use when the student runs /canvas-study:setup, asks to set up, connect or sync Canvas Study or Canvas, wants to add a course, or when a Canvas Study tool says no Canvas token is set up or a course is not indexed.
+description: Set up Canvas Context on this computer, from installing what it needs to connecting Canvas and indexing the student's courses. Use when the student runs /canvas-context:setup, asks to set up, connect or sync Canvas Context or Canvas, wants to add a course, or when a Canvas Context tool says no Canvas token is set up or a course is not indexed.
 ---
 
-# Set up Canvas Study
+# Set up Canvas Context
 
 The student is not a developer. Talk in plain words, one short message per step, and say what is happening while
 something slow runs. Never ask for the Canvas token in the chat: it goes in the plugin's settings, which keep it
@@ -26,9 +26,9 @@ Claude Code uses its shell to run the server. Ask them to install it, restart Cl
 
 ## 2. Make sure the tools are connected
 
-If the Canvas Study tools (`list_courses`, `sync_course`, `sync_status`) are not available in this session, the
+If the Canvas Context tools (`list_courses`, `sync_course`, `sync_status`) are not available in this session, the
 server could not start before step 1 finished. Ask the student to run `/mcp reconnect all` (or open `/mcp`, pick
-canvas-study and choose Reconnect) and then `/canvas-study:setup` again, and stop here. Not a restart: after a
+canvas-context and choose Reconnect) and then `/canvas-context:setup` again, and stop here. Not a restart: after a
 failed start, new sessions skip the server for about 15 minutes, while reconnecting works right away.
 
 ## 3. Check Canvas
@@ -36,13 +36,13 @@ failed start, new sessions skip the server for about 15 minutes, while reconnect
 Call `list_courses`. If its note says there is no Canvas token, or that the token doesn't work, walk the
 student through it:
 
-1. In Canvas: Account > Settings > Approved Integrations > **+ New Access Token**. Purpose: "Canvas Study".
+1. In Canvas: Account > Settings > Approved Integrations > **+ New Access Token**. Purpose: "Canvas Context".
    Copy the token. If the button isn't there, their school doesn't let students create tokens: say so plainly,
    suggest asking the school's IT help desk for one (some schools give them on request), and stop. Without a
-   token Canvas Study can't connect.
-2. In Claude Code: `/plugin` > Installed > canvas-study > **Configure options**, paste it as the Canvas access
+   token Canvas Context can't connect.
+2. In Claude Code: `/plugin` > Installed > canvas-context > **Configure options**, paste it as the Canvas access
    token (and change the Canvas URL if their school isn't canvas.cmu.edu).
-3. Run `/reload-plugins`, then `/canvas-study:setup` again.
+3. Run `/reload-plugins`, then `/canvas-context:setup` again.
 
 Stop here until they come back.
 
@@ -74,5 +74,5 @@ In two or three lines: which courses are ready, and a few things to try, for exa
 - "What does the syllabus say about late work?"
 - "Explain the main idea of this week's reading."
 
-To add a course later, they run `/canvas-study:setup` again. Running it again also refreshes the courses already
+To add a course later, they run `/canvas-context:setup` again. Running it again also refreshes the courses already
 set up (only what changed in Canvas is downloaded).
