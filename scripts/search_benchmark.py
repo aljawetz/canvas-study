@@ -6,7 +6,7 @@ similarity cutoff, and BM25 full-text search. A hit is a result whose
 citation label is one of the question's accepted labels. Reports hit@1,
 hit@5, MRR@10 and search latency, overall and by item type.
 
-    uv run python scripts/search_benchmark.py --home <plugin data folder> --questions ~/.canvas-study-bench/questions.jsonl
+    uv run python scripts/search_benchmark.py --home <plugin data folder> --questions ~/.canvas-context-bench/questions.jsonl
 """
 
 import argparse

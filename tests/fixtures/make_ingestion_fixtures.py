@@ -309,7 +309,7 @@ def make_slides(path: Path) -> None:
             buf.seek(0)
             slide.shapes.add_picture(buf, Inches(6.2), Inches(5.0), width=Inches(3.4))
             slide.placeholders[1].text_frame.paragraphs[0].runs[0].font.size = Pt(20)
-    prs.core_properties.author = "canvas-study tests"
+    prs.core_properties.author = "canvas-context tests"
     prs.core_properties.title = "Building a Course Research Assistant"
     prs.save(str(path))
 

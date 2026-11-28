@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
-logger = logging.getLogger("canvas-study.sync")
+logger = logging.getLogger("canvas-context.sync")
 
 STATUS_FILE = "sync_status.json"
 LOCK_FILE = "sync.lock"

@@ -30,7 +30,7 @@ print("ok")
 def test_server_starts_without_models_or_llm_packages(tmp_path):
     # An empty models folder, as on a student's machine before setup downloads
     # the models: the server must still start (and say what's missing later).
-    env = {**os.environ, "SM_MODELS_DIR": str(tmp_path / "models"), "SM_HOME": str(tmp_path / "home")}
+    env = {**os.environ, "CANVAS_CONTEXT_MODELS_DIR": str(tmp_path / "models"), "CANVAS_CONTEXT_HOME": str(tmp_path / "home")}
     result = subprocess.run([sys.executable, "-c", PROBE], cwd=SERVER, capture_output=True, text=True, timeout=120, env=env)
 
     assert result.returncode == 0, result.stderr[-3000:]

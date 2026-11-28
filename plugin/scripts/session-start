@@ -1,9 +1,9 @@
 #!/bin/sh
 # SessionStart hook. Until a course is indexed on this machine, tell Claude
-# (and the student) that /canvas-study:setup is the way in. Once one is,
+# (and the student) that /canvas-context:setup is the way in. Once one is,
 # tell Claude which courses the student has. The not-set-up note says only
 # what was true at startup: setup can index a course later in the same session.
-HOME_DIR="${SM_HOME:-${CLAUDE_PLUGIN_DATA:-}}"
+HOME_DIR="${CANVAS_CONTEXT_HOME:-${CLAUDE_PLUGIN_DATA:-}}"
 # index.db is written by the first indexed item.
 if [ -n "$HOME_DIR" ] && [ -f "$HOME_DIR/index.db" ]; then
   # Set up: name the student's courses (server/session_note.py writes this
@@ -12,5 +12,5 @@ if [ -n "$HOME_DIR" ] && [ -f "$HOME_DIR/index.db" ]; then
   exit 0
 fi
 cat <<'JSON'
-{"systemMessage": "Canvas Study isn't set up yet. Run /canvas-study:setup to connect Canvas and index your courses.", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "When this session started, Canvas Study had no course indexed on this machine. That can change during the session (/canvas-study:setup indexes courses), so if the student asks about their courses, deadlines or Canvas, call list_courses first: it says which courses are indexed now. Suggest /canvas-study:setup only if none are, or if list_courses says the Canvas token is missing. The first start downloads what the server needs and can miss Claude Code's start-up window: if the Canvas Study tools are missing or its server failed to connect, suggest /canvas-study:setup and then /mcp reconnect all, not restarting Claude Code (after a failed start, new sessions skip the server for about 15 minutes; reconnecting works right away)."}}
+{"systemMessage": "Canvas Context isn't set up yet. Run /canvas-context:setup to connect Canvas and index your courses.", "hookSpecificOutput": {"hookEventName": "SessionStart", "additionalContext": "When this session started, Canvas Context had no course indexed on this machine. That can change during the session (/canvas-context:setup indexes courses), so if the student asks about their courses, deadlines or Canvas, call list_courses first: it says which courses are indexed now. Suggest /canvas-context:setup only if none are, or if list_courses says the Canvas token is missing. The first start downloads what the server needs and can miss Claude Code's start-up window: if the Canvas Context tools are missing or its server failed to connect, suggest /canvas-context:setup and then /mcp reconnect all, not restarting Claude Code (after a failed start, new sessions skip the server for about 15 minutes; reconnecting works right away)."}}
 JSON

@@ -32,10 +32,10 @@ SECTION_EXTRACTORS = {
 SUPPORTED_FILE_SUFFIXES = {".pdf", ".pptx", *SECTION_EXTRACTORS}
 
 
-def _course_paths(sm_home: Path, course_id: int) -> tuple[Path, Path]:
-    course_dir = sm_home / "courses" / str(course_id)
+def _course_paths(data_home: Path, course_id: int) -> tuple[Path, Path]:
+    course_dir = data_home / "courses" / str(course_id)
     course_dir.mkdir(parents=True, exist_ok=True)
-    return course_dir / "manifest.db", sm_home / "index.db"
+    return course_dir / "manifest.db", data_home / "index.db"
 
 
 def _index_item(conn, db_path, table_name, item_type, prefixed_id, is_changed, build):
@@ -265,7 +265,7 @@ def _quiz_doc(prefixed_id, quiz):
     return _sections_doc(prefixed_id, "quiz", title, _quiz_version(quiz), _quiz_sections(quiz))
 
 
-def sync_course(course_id: int, sm_home: Path):
+def sync_course(course_id: int, data_home: Path):
     """Generator. Yields {"item", "status", "error"?} per processed item, then
     exactly one final {"done": True, "new", "changed", "removed", "failed"}
     summary, or {"done": True, "error": str} if the course couldn't be
@@ -279,7 +279,7 @@ def sync_course(course_id: int, sm_home: Path):
     shows it, and links in the text of all the others. 18-658 lists no files
     in its Modules; all 46 of its readings are links in its pages and
     syllabus."""
-    manifest_path, db_path = _course_paths(sm_home, course_id)
+    manifest_path, db_path = _course_paths(data_home, course_id)
     table_name = f"course_{course_id}"
 
     try:

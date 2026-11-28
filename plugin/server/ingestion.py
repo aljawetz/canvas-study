@@ -16,7 +16,7 @@ import openpyxl
 import pdfplumber
 import pytesseract
 
-logger = logging.getLogger("canvas-study")
+logger = logging.getLogger("canvas-context")
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
