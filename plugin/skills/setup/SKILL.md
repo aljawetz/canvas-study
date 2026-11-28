@@ -14,7 +14,7 @@ in the system keychain.
 Run this with Bash (timeout 600000):
 
 ```
-"${CLAUDE_PLUGIN_ROOT}/scripts/server" --download-model
+CLAUDE_PLUGIN_DATA="${CLAUDE_PLUGIN_DATA}" "${CLAUDE_PLUGIN_ROOT}/scripts/server" --download-model
 ```
 
 The first time, it downloads the server's packages and Python (about 85 MB) and the search model (about 130 MB), and

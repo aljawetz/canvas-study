@@ -15,6 +15,10 @@ UV_VERSION=0.9.28
 PLUGIN_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 DATA="${CLAUDE_PLUGIN_DATA:-$HOME/.canvas-study}"
 UV_DIR="$DATA/uv"
+# Where the search model lives: .mcp.json sets this for the server; the setup
+# skill's download (run from Claude's shell, which has no .mcp.json env) gets
+# the same folder from the data folder, so the model is downloaded once.
+export SM_MODELS_DIR="${SM_MODELS_DIR:-$DATA/models}"
 
 find_uvx() {
   for candidate in "$(command -v uvx 2>/dev/null || true)" "$HOME/.local/bin/uvx" "$HOME/.cargo/bin/uvx" "$UV_DIR/uvx" \
