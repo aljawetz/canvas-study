@@ -51,8 +51,9 @@ Works on macOS, Linux and Windows (on Windows it needs [Git for Windows](https:/
 ## Your data
 
 - The Canvas token is stored in your system keychain by Claude Code, not in a file.
-- Downloaded course material and the search index live in the plugin's data folder,
-  `~/.claude/plugins/data/canvas-study-canvas-study/`. Uninstalling the plugin deletes it.
+- Downloaded course material, the search index, the search model, and the Python and packages the server runs on
+  all live in the plugin's data folder, `~/.claude/plugins/data/canvas-study-canvas-study/`. Uninstalling the
+  plugin deletes it.
 
 ## License
 

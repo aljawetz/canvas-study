@@ -3,6 +3,15 @@
 Claude Code updates an installed plugin only when the version in `plugin/.claude-plugin/plugin.json` changes, so
 every release bumps it (and `plugin/server/version.py`, which a test keeps equal).
 
+## 0.4.5 (2026-11-27)
+
+- **Everything in one folder:** the Python and packages the plugin downloads now live in its data folder, next to
+  the search model and your index, so uninstalling removes all of it (about 700 MB). Before, about 600 MB stayed
+  behind in `~/.cache/uv` and `~/.local/share/uv`. The first start after this update downloads the packages and
+  Python once more (a minute or two).
+- **Setup downloads the search model once:** setup's download step put the model where the server didn't look, so it
+  was downloaded again on the first sync. Found while testing a fresh install from the public repo.
+
 ## 0.4.4 (2026-11-25)
 
 - **Clearer about your data:** the README now says plainly that what Claude reads to answer you (course text,
